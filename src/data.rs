@@ -1,12 +1,13 @@
-use std::marker::PhantomData;
+use std::{fmt, marker::PhantomData};
 
 use rand::{distr::Distribution, rngs::StdRng};
 
 /// A uniform data distribution set
+#[derive(Debug)]
 pub struct UniformData<T>(PhantomData<T>);
 
 /// A trait for generalizing sorting data creation
-pub trait Data<T: Sized + Ord> {
+pub trait Data<T: Sized + Ord + fmt::Debug> {
     /// Initialize a vector of the given size
     fn initialize(size: usize, rng: &mut StdRng) -> Vec<T>;
 }

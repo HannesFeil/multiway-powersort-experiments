@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 use clap::Parser;
 use rand::{SeedableRng, rngs::StdRng};
@@ -37,8 +37,8 @@ enum DataType {
     UniformU32,
 }
 
-impl std::fmt::Display for DataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             DataType::UniformU32 => "Uniform u32",
         })
@@ -85,7 +85,7 @@ fn main() {
 /// - runs: The number of samples to measure
 /// - size: The size of the slices to sort
 /// - rng: The rng used for sampling the data
-fn perform_experiment<T: Ord, D: Data<T>>(
+fn perform_experiment<T: Ord + fmt::Debug, D: Data<T>>(
     algorithm: Algorithm,
     runs: usize,
     size: usize,
@@ -98,12 +98,15 @@ fn perform_experiment<T: Ord, D: Data<T>>(
         let mut data = D::initialize(size, rng);
 
         let now = std::time::Instant::now();
-        sorter(&mut data);
+        sorter(std::hint::black_box(&mut data));
         let elapsed = now.elapsed();
 
-        debug_assert!(data.is_sorted());
+        debug_assert!(
+            data.is_sorted(),
+            "{data:?} is not sorted after algorithm run"
+        );
 
-        // NOTE: Skip first sample (taken from original codebase)
+        // NOTE: Skip first sample (behavior taken from original codebase)
         if run != 0 {
             samples.push(elapsed);
         }
