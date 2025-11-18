@@ -1,4 +1,7 @@
+use std::fmt::{self};
+
 mod insertionsort;
+mod quicksort;
 
 /// The different sorting algorithms
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -11,15 +14,18 @@ pub enum Algorithm {
     Insertion,
     /// Binary Insertion sort
     BinaryInsertion,
+    /// Quicksort
+    Quicksort,
 }
 
-impl std::fmt::Display for Algorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Algorithm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Algorithm::Std => "Standard library sort",
             Algorithm::StdUnstable => "Standard library unstable sort",
             Algorithm::Insertion => "Insertion sort",
             Algorithm::BinaryInsertion => "Binary insertion sort",
+            Algorithm::Quicksort => "Quicksort",
         })
     }
 }
@@ -32,6 +38,7 @@ impl Algorithm {
             Algorithm::StdUnstable => <[T]>::sort_unstable,
             Algorithm::Insertion => insertionsort::insertion_sort,
             Algorithm::BinaryInsertion => insertionsort::binary_insertion_sort,
+            Algorithm::Quicksort => quicksort::default_quicksort,
         }
     }
 
@@ -42,6 +49,7 @@ impl Algorithm {
             Algorithm::StdUnstable => false,
             Algorithm::Insertion => true,
             Algorithm::BinaryInsertion => true,
+            Algorithm::Quicksort => false,
         }
     }
 }

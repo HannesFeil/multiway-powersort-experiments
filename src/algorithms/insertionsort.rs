@@ -18,6 +18,9 @@ pub fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: u
 
 /// Sort the slice using insertion sort
 pub fn insertion_sort<T: Ord>(slice: &mut [T]) {
+    if slice.len() < 2 {
+        return;
+    }
     insertion_sort_with_partition(slice, 1);
 }
 
@@ -42,5 +45,8 @@ pub fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_p
 
 /// Sort the slice using insertion sort
 pub fn binary_insertion_sort<T: Ord>(slice: &mut [T]) {
+    if slice.len() < 2 {
+        return;
+    }
     binary_insertion_sort_with_partition(slice, 1);
 }
