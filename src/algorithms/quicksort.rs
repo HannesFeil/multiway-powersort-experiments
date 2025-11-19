@@ -1,7 +1,5 @@
 use rand::Rng;
 
-use crate::algorithms::insertionsort;
-
 /// Quicksort the given slice
 fn quicksort<
     T: Ord,
@@ -17,7 +15,7 @@ fn quicksort<
 
     // Use insertion sort for small slices
     if slice.len() <= INSERTION_THRESHOLD {
-        insertionsort::insertion_sort(slice);
+        crate::algorithms::insertionsort::insertion_sort(slice);
         return;
     }
 
