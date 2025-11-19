@@ -1,10 +1,8 @@
-use std::fmt::{self};
-
 mod insertionsort;
 mod quicksort;
 
 /// The different sorting algorithms
-#[derive(Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum, Hash, PartialEq, Eq)]
 pub enum Algorithm {
     /// The algorithm used by the rust std library
     Std,
@@ -18,8 +16,8 @@ pub enum Algorithm {
     Quicksort,
 }
 
-impl fmt::Display for Algorithm {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Algorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Algorithm::Std => "Standard library sort",
             Algorithm::StdUnstable => "Standard library unstable sort",

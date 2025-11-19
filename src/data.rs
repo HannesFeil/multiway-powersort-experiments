@@ -1,17 +1,16 @@
-use std::{fmt, marker::PhantomData};
-
-use rand::{distr::Distribution, rngs::StdRng};
+use rand::distr::Distribution as _;
 
 /// A uniform data distribution set
 #[derive(Debug)]
-pub struct UniformData<T>(PhantomData<T>);
+pub struct UniformData<T>(std::marker::PhantomData<T>);
 
 /// A trait for generalizing sorting data creation
-pub trait Data<T: Sized + Ord + fmt::Debug> {
+pub trait Data<T: Sized + Ord + std::fmt::Debug> {
     /// Initialize a vector of the given size
-    fn initialize(size: usize, rng: &mut StdRng) -> Vec<T>;
+    fn initialize(size: usize, rng: &mut impl rand::Rng) -> Vec<T>;
 }
 
+/// Implement distribution data for the given integer types
 macro_rules! impl_for_integers {
     ($($type:ty),*) => {
         $(
@@ -20,7 +19,7 @@ macro_rules! impl_for_integers {
     };
     (@single $type:ty) => {
         impl Data<$type> for UniformData<$type> {
-            fn initialize(size: usize, rng: &mut StdRng) -> Vec<$type> {
+            fn initialize(size: usize, rng: &mut impl rand::Rng) -> Vec<$type> {
                 rand::distr::Uniform::new(<$type>::MIN, <$type>::MAX)
                     .unwrap()
                     .sample_iter(rng)
