@@ -2,7 +2,10 @@
 
 /// Sort slice using insertion sort, assuming that `slice[0..partition]` is already in order
 pub fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
-    assert!((0..slice.len()).contains(&partition_point));
+    assert!(
+        (0..slice.len()).contains(&partition_point),
+        "Partition point needs to be in bounds"
+    );
 
     for i in partition_point..slice.len() {
         for j in (0..i).rev() {
@@ -26,7 +29,7 @@ pub fn insertion_sort<T: Ord>(slice: &mut [T]) {
 
 /// Sort slice using binary insertion sort, assuming that `slice[0..partition]` is already in order
 pub fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
-    assert!((0..slice.len()).contains(&partition_point));
+    assert!((0..slice.len()).contains(&partition_point), "Partition point needs to be in bounds");
 
     for i in partition_point..slice.len() {
         let mut j = slice[0..i]

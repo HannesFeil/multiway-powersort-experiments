@@ -1,4 +1,6 @@
 mod insertionsort;
+mod merging;
+mod peeksort;
 mod quicksort;
 
 /// The different sorting algorithms

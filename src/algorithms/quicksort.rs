@@ -11,7 +11,10 @@ fn quicksort<
     slice: &mut [T],
     rng: &mut R,
 ) {
-    debug_assert!(INSERTION_THRESHOLD >= 3);
+    debug_assert!(
+        INSERTION_THRESHOLD >= 3,
+        "We don't want to deal with slices smaller than that."
+    );
 
     // Use insertion sort for small slices
     if slice.len() <= INSERTION_THRESHOLD {
