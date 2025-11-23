@@ -1,3 +1,5 @@
+//! Multiple insertion sort implementations
+
 // TODO: consider working with pointers/unsafe? of course there are a lot of in bounds checks here
 
 /// Sort slice using insertion sort, assuming that `slice[0..partition]` is already in order

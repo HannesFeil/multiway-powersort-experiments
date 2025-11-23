@@ -1,3 +1,5 @@
+//! Contains various sorting algorithms, unified under [`Algorithm`].
+
 mod insertionsort;
 mod merging;
 mod peeksort;

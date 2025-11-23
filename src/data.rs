@@ -1,3 +1,5 @@
+//! Contains various structs used to measure differences and memory effects when being sorted
+
 use rand::distr::Distribution as _;
 
 /// A uniform data distribution set

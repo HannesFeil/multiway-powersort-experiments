@@ -3,6 +3,7 @@ use rand::SeedableRng as _;
 
 mod algorithms;
 mod data;
+mod test;
 
 /// Program entry point
 fn main() {
@@ -15,7 +16,7 @@ fn main() {
     } = input::Args::parse();
 
     println!(
-        "Running tests for the following algorithms:\n{algs}",
+        "Running measurements for the following algorithms:\n{algs}",
         algs = algorithms
             .iter()
             .map(|a| a.to_string())

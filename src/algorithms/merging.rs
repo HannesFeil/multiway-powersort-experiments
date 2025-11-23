@@ -1,3 +1,6 @@
+//! contains structs implementing [`MergingMethod`], which implement various strategies
+//! for merging adjacent runs in a slice.
+
 /// Copied from [`std::slice::sort::stable::BufGuard<T>`]
 pub trait BufGuard<T> {
     /// Creates new buffer that holds at least `capacity` memory.
@@ -20,11 +23,12 @@ impl<T> BufGuard<T> for Vec<T> {
 pub trait MergingMethod {
     /// Merge the two sorted runs `0..split_point` and `split_point..slice.len()`, potentially
     /// using `buffer`.
-    fn merge<T: Ord, B: BufGuard<T>>(
-        slice: &mut [T],
-        split_point: usize,
-        buffer: &mut [std::mem::MaybeUninit<T>],
-    );
+    fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]);
+
+    /// The required capacity of the buffer, by default equal to `size`
+    fn required_capacity(size: usize) -> usize {
+        size
+    }
 }
 
 /// A [`MergingMethod`] implementation via a simple merging procedure
@@ -35,11 +39,11 @@ pub trait MergingMethod {
 pub struct CopyBoth;
 
 impl MergingMethod for CopyBoth {
-    fn merge<T: Ord, B: BufGuard<T>>(
-        slice: &mut [T],
-        split_point: usize,
-        buffer: &mut [std::mem::MaybeUninit<T>],
-    ) {
+    fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
+        if slice.is_empty() {
+            return;
+        }
+
         assert!(
             buffer.len() >= slice.len(),
             "Buffer needs to have at least the size of slice"
@@ -119,11 +123,140 @@ impl MergingMethod for CopyBoth {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_correct_merge() {
-        let mut elements: [u32; 10] = [1, 4, 5, 8, 9, 0, 2, 3, 6, 7];
-        let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(elements.len());
-        CopyBoth::merge::<_, Vec<_>>(&mut elements, 5, buffer.as_uninit_slice_mut());
-        assert!(elements.is_sorted());
+    use rand::Rng as _;
+    use rand::SeedableRng as _;
+
+    /// How big the test arrays should be
+    const TEST_SIZE: usize = 100;
+    /// How many times to run each test
+    const TEST_RUNS: usize = 100;
+    /// The seed shared by all tests
+    const TEST_SEED: u64 = 0xa8bf17eb656f828d;
+    /// The rng used by each test
+    type Rng = rand::rngs::SmallRng;
+
+    /// Generate the `Rng` for a test
+    fn test_rng() -> Rng {
+        Rng::seed_from_u64(TEST_SEED)
+    }
+
+    macro_rules! test_methods {
+        ($($method:ident),*) => {
+            $(
+                paste::paste! {
+                    mod [< $method:snake >] {
+                        use super::*;
+
+                        test_methods!(@single $method);
+                    }
+                }
+            )*
+        };
+        (@single $method:ident) => {
+            #[test]
+            pub fn test_empty_merges() {
+                test_empty_merge::<$method>();
+            }
+
+            #[test]
+            pub fn test_correct_merges() {
+                test_correct_merge::<$method>();
+            }
+
+            #[test]
+            pub fn test_soundness_merges() {
+                test_soundness_merge::<$method>();
+            }
+        };
+    }
+
+    test_methods!(CopyBoth);
+
+    /// Test merging an empty slice
+    fn test_empty_merge<T: MergingMethod>() {
+        let mut elements = [(); 0];
+        let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
+
+        // This should not panic nor cause UB
+        T::merge(&mut elements, 0, buffer.as_uninit_slice_mut())
+    }
+
+    /// Test that two runs are correctly merged
+    fn test_correct_merge<T: MergingMethod>() {
+        let mut rng = test_rng();
+        let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
+
+        // Test random runs
+        for run in 0..TEST_RUNS {
+            let mut elements: [u32; TEST_SIZE] = std::array::from_fn(|_| rng.random());
+            let split = rng.random_range(0..TEST_SIZE);
+            elements[..split].sort();
+            elements[split..].sort();
+
+            T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
+
+            assert!(
+                elements.is_sorted(),
+                "Resulting elements were not sorted by {name} in run {run}",
+                name = std::any::type_name::<T>(),
+            );
+        }
+
+        // Test random runs, split at 0 and n - 1
+        for split in [0, TEST_SIZE - 1] {
+            let mut elements: [u32; TEST_SIZE] = std::array::from_fn(|_| rng.random());
+            elements[..split].sort();
+            elements[split..].sort();
+
+            T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
+
+            assert!(
+                elements.is_sorted(),
+                "Resulting elements were not sorted by {name} with split {split}",
+                name = std::any::type_name::<T>(),
+            );
+        }
+    }
+
+    /// Run Merging methods with [`crate::test::RandomOrdered`] elements and
+    /// [`crate::test::MaybePanickingOrdered`] elements, mostly useful for running under miri
+    fn test_soundness_merge<T: MergingMethod>() {
+        let mut rng = test_rng();
+        let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
+        let mut maybe_panicking_buffer =
+            <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
+
+        // Test random runs
+        for _ in 0..TEST_RUNS {
+            // RandomOrdered elements
+            let mut elements: [crate::test::RandomOrdered; TEST_SIZE] =
+                crate::test::RandomOrdered::new_array(TEST_SEED);
+            let split = rng.random_range(0..TEST_SIZE);
+
+            T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
+
+            println!("{elements:?}");
+
+            // MaybePanickingOrdered elements
+            let mut elements: [crate::test::MaybePanickingOrdered<
+                TEST_SIZE,
+                crate::test::RandomOrdered,
+            >; TEST_SIZE] = crate::test::MaybePanickingOrdered::new_array(
+                crate::test::RandomOrdered::new_array(TEST_SEED),
+                TEST_SEED,
+            );
+            let split = rng.random_range(0..TEST_SIZE);
+
+            // The types are not actually unwind safe but must not trigger UB anyway
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                T::merge(
+                    &mut elements,
+                    split,
+                    maybe_panicking_buffer.as_uninit_slice_mut(),
+                );
+            }));
+
+            println!("{elements:?}");
+        }
     }
 }
