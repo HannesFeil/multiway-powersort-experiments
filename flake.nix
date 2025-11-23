@@ -37,7 +37,6 @@
           mkShell {
             nativeBuildInputs = [
               toolchain
-              rust-analyzer
             ];
           };
       }
