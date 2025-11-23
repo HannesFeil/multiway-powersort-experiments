@@ -1,3 +1,5 @@
+//! The quicksort implementation
+
 use rand::Rng;
 
 /// Quicksort the given slice

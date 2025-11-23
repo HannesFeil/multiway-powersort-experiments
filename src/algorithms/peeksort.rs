@@ -1,3 +1,5 @@
+//! The peeksort implementation
+
 pub mod merging_method {
     pub const COPY_BOTH: usize = 0;
 }
