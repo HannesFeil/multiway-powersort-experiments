@@ -18,6 +18,8 @@ pub enum Algorithm {
     BinaryInsertion,
     /// Quicksort
     Quicksort,
+    /// Peeksort
+    Peeksort,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -28,6 +30,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::Insertion => "Insertion sort",
             Algorithm::BinaryInsertion => "Binary insertion sort",
             Algorithm::Quicksort => "Quicksort",
+            Algorithm::Peeksort => "Peeksort",
         })
     }
 }
@@ -41,6 +44,7 @@ impl Algorithm {
             Algorithm::Insertion => insertionsort::insertion_sort,
             Algorithm::BinaryInsertion => insertionsort::binary_insertion_sort,
             Algorithm::Quicksort => quicksort::default_quicksort,
+            Algorithm::Peeksort => peeksort::default_peeksort,
         }
     }
 
@@ -52,6 +56,7 @@ impl Algorithm {
             Algorithm::Insertion => true,
             Algorithm::BinaryInsertion => true,
             Algorithm::Quicksort => false,
+            Algorithm::Peeksort => todo!("Check this"),
         }
     }
 }
