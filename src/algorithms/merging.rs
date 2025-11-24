@@ -1,6 +1,91 @@
 //! contains structs implementing [`MergingMethod`], which implement various strategies
 //! for merging adjacent runs in a slice.
 
+/// Iterates through `iter` and returns the first element `current` with the proceeding element
+/// `next`, such that `f(current, next) == true` and returns `Some(current)`
+///
+/// If `f(current, next)` is never true, returns `Ok(None)`.
+///
+/// # Errors
+///
+/// Returns `Err` if `iter` returns `None` at the start
+fn find_first_sequentially<T>(
+    mut iter: impl Iterator<Item = T>,
+    mut f: impl FnMut(&T, &T) -> bool,
+) -> Result<Option<T>, ()> {
+    let mut current = iter.next().ok_or(())?;
+
+    for next in iter {
+        if f(&current, &next) {
+            return Ok(Some(current));
+        } else {
+            current = next;
+        }
+    }
+
+    Ok(None)
+}
+
+/// Returns the largest `index`, such that `slice[..index]` is weakly increasing
+pub fn weakly_increasing_prefix_index<T: Ord>(slice: &mut [T]) -> usize {
+    let iter = slice.iter().enumerate();
+
+    // Find the index of the first element breaking the sequence
+    match find_first_sequentially(iter, |(_, current), (_, next)| current > next) {
+        // Found the index
+        Ok(Some((index, _))) => index + 1,
+        // Sequence is not found, split into full and empty slice
+        Ok(None) => slice.len(),
+        // Slice is empty, split into two empty slices
+        Err(()) => 0,
+    }
+}
+
+/// Returns the smallest `index`, such that `slice[index..]` is weakly increasing
+pub fn weakly_increasing_suffix_index<T: Ord>(slice: &mut [T]) -> usize {
+    let iter = slice.iter().enumerate().rev();
+
+    // Find the index of the first element breaking the sequence
+    match find_first_sequentially(iter, |(_, current), (_, previous)| current < previous) {
+        // Found the index
+        Ok(Some((index, _))) => index,
+        // Sequence is not found, split into full and empty slice
+        Ok(None) => slice.len(),
+        // Slice is empty, split into two empty slices
+        Err(()) => 0,
+    }
+}
+
+/// Returns the largest `index`, such that `slice[..index]` is strictly decreasing
+pub fn strictly_decreasing_prefix_index<T: Ord>(slice: &mut [T]) -> usize {
+    let iter = slice.iter().enumerate();
+
+    // Find the index of the first element breaking the sequence
+    match find_first_sequentially(iter, |(_, current), (_, next)| current <= next) {
+        // Found the index
+        Ok(Some((index, _))) => index + 1,
+        // Sequence is not found, split into full and empty slice
+        Ok(None) => slice.len(),
+        // Slice is empty, split into two empty slices
+        Err(()) => 0,
+    }
+}
+
+/// Returns the smallest `index`, such that `slice[index..]` is strictly decreasing
+pub fn strictly_decreasing_suffix_index<T: Ord>(slice: &mut [T]) -> usize {
+    let iter = slice.iter().enumerate().rev();
+
+    // Find the index of the first element breaking the sequence
+    match find_first_sequentially(iter, |(_, current), (_, previous)| current >= previous) {
+        // Found the index
+        Ok(Some((index, _))) => index,
+        // Sequence is not found, split into full and empty slice
+        Ok(None) => slice.len(),
+        // Slice is empty, split into two empty slices
+        Err(()) => 0,
+    }
+}
+
 /// Copied from [`std::slice::sort::stable::BufGuard<T>`]
 pub trait BufGuard<T> {
     /// Creates new buffer that holds at least `capacity` memory.
@@ -25,7 +110,8 @@ pub trait MergingMethod {
     /// using `buffer`.
     fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]);
 
-    /// The required capacity of the buffer, by default equal to `size`
+    /// The required capacity of the buffer, needed for merging slices with length less than
+    /// or equal to `size`.
     fn required_capacity(size: usize) -> usize {
         size
     }
@@ -235,7 +321,7 @@ mod tests {
 
             T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
 
-            println!("{elements:?}");
+            drop(elements);
 
             // MaybePanickingOrdered elements
             let mut elements: [crate::test::MaybePanickingOrdered<
@@ -256,7 +342,7 @@ mod tests {
                 );
             }));
 
-            println!("{elements:?}");
+            drop(elements);
         }
     }
 }
