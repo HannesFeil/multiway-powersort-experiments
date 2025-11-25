@@ -38,6 +38,9 @@
             nativeBuildInputs = [
               toolchain
             ];
+            buildInputs = [
+              samply
+            ];
           };
       }
     );
