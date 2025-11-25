@@ -6,6 +6,10 @@ use rand::distr::Distribution as _;
 #[derive(Debug)]
 pub struct UniformData<T>(std::marker::PhantomData<T>);
 
+/// A random permutation data distribution
+#[derive(Debug)]
+pub struct PermutationData<T>(std::marker::PhantomData<T>);
+
 /// A trait for generalizing sorting data creation
 pub trait Data<T: Sized + Ord + std::fmt::Debug> {
     /// Initialize a vector of the given size
@@ -27,6 +31,17 @@ macro_rules! impl_for_integers {
                     .sample_iter(rng)
                     .take(size)
                     .collect()
+            }
+        }
+
+        impl Data<$type> for PermutationData<$type> {
+            fn initialize(size: usize, rng: &mut impl rand::Rng) -> Vec<$type> {
+                use rand::seq::SliceRandom as _;
+
+                let mut result: Vec<$type> = (0..size as $type).collect();
+                result.shuffle(rng);
+
+                result
             }
         }
     }

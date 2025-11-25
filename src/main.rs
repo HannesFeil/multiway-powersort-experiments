@@ -47,6 +47,11 @@ fn main() {
             input::DataType::UniformU32 => {
                 perform_experiment::<u32, data::UniformData<u32>>(algorithm, runs, size, &mut rng)
             }
+            input::DataType::PermutationU32 => {
+                perform_experiment::<u32, data::PermutationData<u32>>(
+                    algorithm, runs, size, &mut rng,
+                )
+            }
         };
 
         println!("Stats: {stats:?}");
@@ -182,12 +187,14 @@ mod input {
     #[derive(Clone, Copy, clap::ValueEnum)]
     pub enum DataType {
         UniformU32,
+        PermutationU32,
     }
 
     impl std::fmt::Display for DataType {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.write_str(match self {
                 DataType::UniformU32 => "Uniform u32",
+                DataType::PermutationU32 => "Permutation u32",
             })
         }
     }

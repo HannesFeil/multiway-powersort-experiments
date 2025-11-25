@@ -71,10 +71,10 @@ fn quicksort<
     slice.swap(0, i);
 
     // Recurse into both partitions
-    quicksort::<_, _, INSERTION_THRESHOLD, INSERTION_THRESHOLD, CHECK_SORTED>(&mut slice[..i], rng);
+    quicksort::<_, _, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(&mut slice[..i], rng);
     // This panics, other than the i = 0 case, which is why we need to check for it
     if i < slice.len() {
-        quicksort::<_, _, INSERTION_THRESHOLD, INSERTION_THRESHOLD, CHECK_SORTED>(
+        quicksort::<_, _, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(
             &mut slice[i + 1..],
             rng,
         );
