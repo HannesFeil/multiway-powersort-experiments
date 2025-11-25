@@ -8,3 +8,7 @@ clap = { version = "4.5.51", features = ["derive"] }
 paste = "1.0.15"
 rand = "0.9.2"
 rolling-stats = "0.8.0"
+
+[profile.profiling]
+inherits = "release"
+debug = true
