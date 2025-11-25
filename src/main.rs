@@ -3,6 +3,7 @@ use rand::SeedableRng as _;
 
 mod algorithms;
 mod data;
+#[cfg(test)]
 mod test;
 
 /// Program entry point
@@ -42,13 +43,13 @@ fn main() {
     for algorithm in algorithms {
         println!("Running experiment with sort: {algorithm}");
 
-        let samples = match data {
+        let (samples, stats) = match data {
             input::DataType::UniformU32 => {
                 perform_experiment::<u32, data::UniformData<u32>>(algorithm, runs, size, &mut rng)
             }
         };
 
-        println!("Time samples: {samples:?}");
+        println!("Stats: {stats:?}");
     }
 }
 
@@ -62,9 +63,11 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
     runs: usize,
     size: usize,
     rng: &mut impl rand::Rng,
-) -> Vec<std::time::Duration> {
+) -> (Vec<std::time::Duration>, rolling_stats::Stats<f64>) {
     let sorter = algorithm.sorter();
     let mut samples = Vec::with_capacity(runs);
+
+    let mut stats: rolling_stats::Stats<f64> = rolling_stats::Stats::new();
 
     for run in 0..=runs {
         let mut data = D::initialize(size, rng);
@@ -81,10 +84,12 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
         // NOTE: Skip first sample (behavior taken from original codebase)
         if run != 0 {
             samples.push(elapsed);
+            // TODO: is this cast fine?
+            stats.update(elapsed.as_millis() as f64);
         }
     }
 
-    samples
+    (samples, stats)
 }
 
 /// Command line input handling
