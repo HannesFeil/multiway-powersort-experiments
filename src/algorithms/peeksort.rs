@@ -157,3 +157,26 @@ pub fn peeksort<
 pub fn default_peeksort<T: Ord>(slice: &mut [T]) {
     peeksort::<T, super::merging::CopyBoth, Vec<T>, 24, true>(slice);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RUNS: usize = 100;
+    const TEST_SIZE: usize = 100_000;
+
+    #[test]
+    fn empty() {
+        crate::test::test_empty(default_peeksort);
+    }
+
+    #[test]
+    fn random() {
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_peeksort);
+    }
+
+    #[test]
+    fn random_stable() {
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_peeksort);
+    }
+}

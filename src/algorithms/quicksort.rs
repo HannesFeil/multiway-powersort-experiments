@@ -110,3 +110,26 @@ pub fn default_rng_quicksort<
 pub fn default_quicksort<T: Ord>(slice: &mut [T]) {
     default_rng_quicksort::<_, 24, 128, false>(slice);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RUNS: usize = 100;
+    const TEST_SIZE: usize = 100_000;
+
+    #[test]
+    fn empty() {
+        crate::test::test_empty(default_quicksort);
+    }
+
+    #[test]
+    fn random() {
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_quicksort);
+    }
+
+    #[test]
+    fn random_stable() {
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_quicksort);
+    }
+}

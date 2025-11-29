@@ -1,18 +1,29 @@
 //! Contains various structs intended for testing purposes
 
-use rand::{Rng as _, SeedableRng};
+use rand::{Rng as _, SeedableRng as _, seq::SliceRandom as _};
+
+/// The seed shared by all tests
+pub const TEST_SEED: u64 = 0xa8bf17eb656f828d;
+/// The rng used by each test
+pub type Rng = rand::rngs::SmallRng;
+
+/// Generate the `Rng` for a test
+pub fn test_rng() -> Rng {
+    Rng::seed_from_u64(TEST_SEED)
+}
 
 /// A unit struct that returns a random ordering when compared
 #[derive(Debug, Clone)]
 pub struct RandomOrdered(std::rc::Rc<std::cell::RefCell<rand::rngs::SmallRng>>);
 
 impl RandomOrdered {
-    /// Create a new array of RandomOrdered, created with a shared [`rand::rngs::SmallRng`]
-    pub fn new_array<const SIZE: usize>(seed: u64) -> [Self; SIZE] {
+    /// Create a new [`Iterator`] of RandomOrdered, created with a shared [`rand::rngs::SmallRng`]
+    pub fn new_iter(seed: u64) -> impl Iterator<Item = Self> {
         let rng = std::rc::Rc::new(std::cell::RefCell::new(
             rand::rngs::SmallRng::seed_from_u64(seed),
         ));
-        std::array::from_fn(|_| RandomOrdered(rng.clone()))
+
+        std::iter::repeat_with(move || RandomOrdered(rng.clone()))
     }
 }
 
@@ -49,13 +60,13 @@ pub struct MaybePanickingOrdered<const LIKELIHOOD: usize, T: Ord>(
 );
 
 impl<const LIKELIHOOD: usize, T: Ord> MaybePanickingOrdered<LIKELIHOOD, T> {
-    /// Map an array of `T` to an array of `MaybePanickingOrdered<T>` with a shared
-    /// [`rand::rngs::SmallRng`]
-    pub fn new_array<const SIZE: usize>(array: [T; SIZE], seed: u64) -> [Self; SIZE] {
+    /// Map an [`Iterator`] of `T` to `Self` with a shared [`rand::rngs::SmallRng`]
+    pub fn map_iter(iter: impl Iterator<Item = T>, seed: u64) -> impl Iterator<Item = Self> {
         let rng = std::rc::Rc::new(std::cell::RefCell::new(
             rand::rngs::SmallRng::seed_from_u64(seed),
         ));
-        array.map(|element| Self(rng.clone(), element))
+
+        iter.map(move |element| Self(rng.clone(), element))
     }
 }
 
@@ -82,5 +93,97 @@ impl<const LIKELIHOOD: usize, T: Ord> Ord for MaybePanickingOrdered<LIKELIHOOD, 
             0 => panic!("MaybePanickingOrdered panicked during comparison"),
             _ => self.1.cmp(&other.1),
         }
+    }
+}
+
+/// A Wrapper struct that tracks an original index with an ordered element,
+/// used to test sort results for stability
+#[derive(Debug, Clone)]
+pub struct IndexedOrdered<T: Ord>(usize, T);
+
+impl<T: Ord> IndexedOrdered<T> {
+    /// Create a new iterator of `IndexedOrdered`, tracking the position of each element in `iter`
+    pub fn map_iter(iter: impl Iterator<Item = T>) -> impl Iterator<Item = Self> {
+        iter.enumerate()
+            .map(|(index, element)| Self(index, element))
+    }
+
+    /// Check `slice` is sorted and check for stability, e.g. equal elements keeping initial ordering.
+    pub fn is_stable_sorted(slice: &[Self]) -> bool {
+        if slice.len() < 2 {
+            return true;
+        }
+
+        let mut previous = &slice[0];
+        for current in slice[1..].iter() {
+            match current.cmp(previous) {
+                // Slice is not sorted
+                std::cmp::Ordering::Less => return false,
+                // Elements are not stable
+                std::cmp::Ordering::Equal if current.0 < previous.0 => return false,
+                _ => {}
+            }
+
+            previous = current;
+        }
+
+        true
+    }
+}
+
+impl<T: Ord> PartialEq for IndexedOrdered<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+}
+
+impl<T: Ord> Eq for IndexedOrdered<T> {}
+
+impl<T: Ord> PartialOrd for IndexedOrdered<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Ord> Ord for IndexedOrdered<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.1.cmp(&other.1)
+    }
+}
+
+/// Test the sort on an empty slice
+pub fn test_empty(sort: fn(&mut [usize])) {
+    sort(&mut []);
+}
+
+/// Test the sort on some random ordered slices and check they are sorted afterwords
+pub fn test_random_sorted<const RUNS: usize, const TEST_SIZE: usize>(sort: fn(&mut [usize])) {
+    let mut rng = test_rng();
+
+    let mut values: Box<[usize]> = (0..TEST_SIZE).collect();
+
+    for run in 0..RUNS {
+        values.shuffle(&mut rng);
+        sort(&mut values);
+        assert!(values.is_sorted(), "Run {run} was not sorted");
+    }
+}
+
+/// Like [`test_random_sorted`] but additionally checks that the sort was stable
+pub fn test_random_stable_sorted<const RUNS: usize, const TEST_SIZE: usize>(
+    sort: fn(&mut [IndexedOrdered<usize>]),
+) {
+    let mut rng = test_rng();
+    let mut values: Box<[usize]> = std::iter::repeat_n(0..TEST_SIZE / 4, 4).flatten().collect();
+    let mut ordered_values: Box<[IndexedOrdered<usize>]>;
+
+    for run in 0..RUNS {
+        values.shuffle(&mut rng);
+        ordered_values = IndexedOrdered::map_iter(values.iter().copied()).collect();
+        sort(&mut ordered_values);
+        assert!(
+            IndexedOrdered::is_stable_sorted(&ordered_values),
+            "Run {run} was not stable sorted"
+        );
     }
 }

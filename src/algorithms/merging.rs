@@ -210,21 +210,11 @@ mod tests {
     use super::*;
 
     use rand::Rng as _;
-    use rand::SeedableRng as _;
 
     /// How big the test arrays should be
     const TEST_SIZE: usize = 100;
     /// How many times to run each test
     const TEST_RUNS: usize = 100;
-    /// The seed shared by all tests
-    const TEST_SEED: u64 = 0xa8bf17eb656f828d;
-    /// The rng used by each test
-    type Rng = rand::rngs::SmallRng;
-
-    /// Generate the `Rng` for a test
-    fn test_rng() -> Rng {
-        Rng::seed_from_u64(TEST_SEED)
-    }
 
     macro_rules! test_methods {
         ($($method:ident),*) => {
@@ -269,7 +259,7 @@ mod tests {
 
     /// Test that two runs are correctly merged
     fn test_correct_merge<T: MergingMethod>() {
-        let mut rng = test_rng();
+        let mut rng = crate::test::test_rng();
         let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
 
         // Test random runs
@@ -307,7 +297,7 @@ mod tests {
     /// Run Merging methods with [`crate::test::RandomOrdered`] elements and
     /// [`crate::test::MaybePanickingOrdered`] elements, mostly useful for running under miri
     fn test_soundness_merge<T: MergingMethod>() {
-        let mut rng = test_rng();
+        let mut rng = crate::test::test_rng();
         let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
         let mut maybe_panicking_buffer =
             <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
@@ -315,8 +305,10 @@ mod tests {
         // Test random runs
         for _ in 0..TEST_RUNS {
             // RandomOrdered elements
-            let mut elements: [crate::test::RandomOrdered; TEST_SIZE] =
-                crate::test::RandomOrdered::new_array(TEST_SEED);
+            let mut elements: Box<[crate::test::RandomOrdered]> =
+                crate::test::RandomOrdered::new_iter(crate::test::TEST_SEED)
+                    .take(TEST_SIZE)
+                    .collect();
             let split = rng.random_range(0..TEST_SIZE);
 
             T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
@@ -324,13 +316,13 @@ mod tests {
             drop(elements);
 
             // MaybePanickingOrdered elements
-            let mut elements: [crate::test::MaybePanickingOrdered<
-                TEST_SIZE,
-                crate::test::RandomOrdered,
-            >; TEST_SIZE] = crate::test::MaybePanickingOrdered::new_array(
-                crate::test::RandomOrdered::new_array(TEST_SEED),
-                TEST_SEED,
-            );
+            let mut elements: Box<
+                [crate::test::MaybePanickingOrdered<TEST_SIZE, crate::test::RandomOrdered>],
+            > = crate::test::MaybePanickingOrdered::map_iter(
+                crate::test::RandomOrdered::new_iter(crate::test::TEST_SEED).take(TEST_SIZE),
+                crate::test::TEST_SEED,
+            )
+            .collect();
             let split = rng.random_range(0..TEST_SIZE);
 
             // The types are not actually unwind safe but must not trigger UB anyway
