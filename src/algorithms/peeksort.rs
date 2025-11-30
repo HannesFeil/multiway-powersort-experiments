@@ -1,11 +1,64 @@
 //! The peeksort implementation
 
+use crate::algorithms::merging::BufGuard as _;
+
+/// The default insertion sort to use
+type DefaultInsertionSort = super::insertionsort::InsertionSort;
+
+/// The default [`super::merging::MergingMethod`] to use
+type DefaultMergingMethod = super::merging::CopyBoth;
+
+/// The default BufGuardFactory to use
+type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
+
+/// The peeksort [`super::Sort`]
+pub struct PeekSort<
+    I: super::Sort = DefaultInsertionSort,
+    M: super::merging::MergingMethod = DefaultMergingMethod,
+    B: super::BufGuardFactory = DefaultBufGuardFactory,
+    const INSERTION_THRESHOLD: usize = 24,
+    const ONLY_INCREASING_RUNS: bool = true,
+>(
+    std::marker::PhantomData<I>,
+    std::marker::PhantomData<M>,
+    std::marker::PhantomData<B>,
+);
+
+impl<
+    I: super::Sort,
+    M: super::merging::MergingMethod,
+    B: super::BufGuardFactory,
+    const INSERTION_THRESHOLD: usize,
+    const ONLY_INCREASING_RUNS: bool,
+> super::Sort for PeekSort<I, M, B, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>
+{
+    const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
+
+    fn sort<T: Ord>(slice: &mut [T]) {
+        if slice.len() < 2 {
+            return;
+        }
+
+        // Conservatively initiate a buffer big enough to merge the complete array
+        let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
+
+        // Delegate to helper function
+        peeksort::<T, I, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
+            slice,
+            buffer.as_uninit_slice_mut(),
+            1,
+            slice.len() - 1,
+        );
+    }
+}
+
 /// The actual peek sort implementation
 ///
 /// Sorts `slice` under the assumption, that `slice[..left_run_end]` and
 /// `slice[right_run_begin..]` are already sorted.
-fn peeksort_helper<
+fn peeksort<
     T: Ord,
+    I: super::Sort,
     M: super::merging::MergingMethod,
     const INSERTION_THRESHOLD: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -24,14 +77,14 @@ fn peeksort_helper<
 
     // Use insertion sort for small slices
     if slice.len() < INSERTION_THRESHOLD {
-        crate::algorithms::insertionsort::insertion_sort(slice);
+        I::sort(slice);
         return;
     }
 
     let middle = slice.len() / 2;
 
     if middle <= left_run_end {
-        peeksort_helper::<T, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
+        peeksort::<T, I, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
             &mut slice[left_run_end..],
             buffer,
             1,
@@ -39,7 +92,7 @@ fn peeksort_helper<
         );
         M::merge(slice, left_run_end, buffer);
     } else if middle >= right_run_begin {
-        peeksort_helper::<T, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
+        peeksort::<T, I, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
             &mut slice[..right_run_begin],
             buffer,
             left_run_end,
@@ -91,13 +144,13 @@ fn peeksort_helper<
         }
 
         if middle - i < j - middle {
-            peeksort_helper::<T, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
+            peeksort::<T, I, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
                 &mut slice[..i],
                 buffer,
                 left_run_end,
                 i - 1,
             );
-            peeksort_helper::<T, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
+            peeksort::<T, I, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
                 &mut slice[i..],
                 buffer,
                 j - i,
@@ -105,13 +158,13 @@ fn peeksort_helper<
             );
             M::merge(slice, i, buffer);
         } else {
-            peeksort_helper::<T, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
+            peeksort::<T, I, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
                 &mut slice[..j],
                 buffer,
                 left_run_end,
                 i,
             );
-            peeksort_helper::<T, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
+            peeksort::<T, I, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
                 &mut slice[j..],
                 buffer,
                 1,
@@ -122,42 +175,6 @@ fn peeksort_helper<
     }
 }
 
-/// Sort the slice using Peeksort, initializing a buffer once which is then used for merging
-pub fn peeksort<
-    T: Ord,
-    M: super::merging::MergingMethod,
-    B: super::merging::BufGuard<T>,
-    const INSERTION_THRESHOLD: usize,
-    const ONLY_INCREASING_RUNS: bool,
->(
-    slice: &mut [T],
-) {
-    if slice.len() < 2 {
-        return;
-    }
-
-    // Conservatively initiate a buffer big enough to merge the complete array
-    let mut buffer = B::with_capacity(M::required_capacity(slice.len()));
-
-    // Delegate to helper function
-    peeksort_helper::<T, M, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>(
-        slice,
-        buffer.as_uninit_slice_mut(),
-        1,
-        slice.len() - 1,
-    );
-}
-
-/// Peeksort the given slice, with the following default const parameters
-///
-/// - `M = CopyBoth`
-/// - `B = Vec<T>`
-/// - `INSERTION_THRESHOLD = 24`
-/// - `ONLY_INCREASING_RUNS = true`
-pub fn default_peeksort<T: Ord>(slice: &mut [T]) {
-    peeksort::<T, super::merging::CopyBoth, Vec<T>, 24, true>(slice);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,26 +182,30 @@ mod tests {
     const RUNS: usize = 100;
     const TEST_SIZE: usize = 100_000;
 
-    /// Default peek sort but with `ONLY_INCREASING_RUNS = false`
-    pub fn default_peeksort_decreasing<T: Ord>(slice: &mut [T]) {
-        peeksort::<T, super::super::merging::CopyBoth, Vec<T>, 24, false>(slice);
-    }
+    /// Default peeksort but allowing decreasing runs
+    type PeekSortDecreasing = PeekSort<
+        super::DefaultInsertionSort,
+        super::DefaultMergingMethod,
+        super::DefaultBufGuardFactory,
+        24,
+        false,
+    >;
 
     #[test]
     fn empty() {
-        crate::test::test_empty(default_peeksort);
-        crate::test::test_empty(default_peeksort_decreasing);
+        crate::test::test_empty::<PeekSort>();
+        crate::test::test_empty::<PeekSortDecreasing>();
     }
 
     #[test]
     fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_peeksort);
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_peeksort_decreasing);
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PeekSort>();
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PeekSortDecreasing>();
     }
 
     #[test]
     fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_peeksort);
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_peeksort_decreasing);
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PeekSort>();
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PeekSortDecreasing>();
     }
 }

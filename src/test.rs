@@ -152,27 +152,29 @@ impl<T: Ord> Ord for IndexedOrdered<T> {
 }
 
 /// Test the sort on an empty slice
-pub fn test_empty(sort: fn(&mut [usize])) {
-    sort(&mut []);
+pub fn test_empty<S: crate::algorithms::Sort>() {
+    S::sort::<usize>(&mut []);
 }
 
 /// Test the sort on some random ordered slices and check they are sorted afterwords
-pub fn test_random_sorted<const RUNS: usize, const TEST_SIZE: usize>(sort: fn(&mut [usize])) {
+pub fn test_random_sorted<const RUNS: usize, const TEST_SIZE: usize, S: crate::algorithms::Sort>() {
     let mut rng = test_rng();
 
     let mut values: Box<[usize]> = (0..TEST_SIZE).collect();
 
     for run in 0..RUNS {
         values.shuffle(&mut rng);
-        sort(&mut values);
+        S::sort(&mut values);
         assert!(values.is_sorted(), "Run {run} was not sorted");
     }
 }
 
 /// Like [`test_random_sorted`] but additionally checks that the sort was stable
-pub fn test_random_stable_sorted<const RUNS: usize, const TEST_SIZE: usize>(
-    sort: fn(&mut [IndexedOrdered<usize>]),
-) {
+pub fn test_random_stable_sorted<
+    const RUNS: usize,
+    const TEST_SIZE: usize,
+    S: crate::algorithms::Sort,
+>() {
     let mut rng = test_rng();
     let mut values: Box<[usize]> = std::iter::repeat_n(0..TEST_SIZE / 4, 4).flatten().collect();
     let mut ordered_values: Box<[IndexedOrdered<usize>]>;
@@ -180,7 +182,7 @@ pub fn test_random_stable_sorted<const RUNS: usize, const TEST_SIZE: usize>(
     for run in 0..RUNS {
         values.shuffle(&mut rng);
         ordered_values = IndexedOrdered::map_iter(values.iter().copied()).collect();
-        sort(&mut ordered_values);
+        S::sort(&mut ordered_values);
         assert!(
             IndexedOrdered::is_stable_sorted(&ordered_values),
             "Run {run} was not stable sorted"
