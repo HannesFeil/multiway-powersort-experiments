@@ -165,18 +165,26 @@ mod tests {
     const RUNS: usize = 100;
     const TEST_SIZE: usize = 100_000;
 
+    /// Default peek sort but with `ONLY_INCREASING_RUNS = false`
+    pub fn default_peeksort_decreasing<T: Ord>(slice: &mut [T]) {
+        peeksort::<T, super::super::merging::CopyBoth, Vec<T>, 24, false>(slice);
+    }
+
     #[test]
     fn empty() {
         crate::test::test_empty(default_peeksort);
+        crate::test::test_empty(default_peeksort_decreasing);
     }
 
     #[test]
     fn random() {
         crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_peeksort);
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_peeksort_decreasing);
     }
 
     #[test]
     fn random_stable() {
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_peeksort);
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_peeksort_decreasing);
     }
 }
