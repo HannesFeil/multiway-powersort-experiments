@@ -115,6 +115,11 @@ pub trait MergingMethod {
     fn required_capacity(size: usize) -> usize {
         size
     }
+
+    /// Return if the merging method is stable
+    fn is_stable() -> bool {
+        true
+    }
 }
 
 /// A [`MergingMethod`] implementation via a simple merging procedure
@@ -165,7 +170,7 @@ impl MergingMethod for CopyBoth {
         unsafe {
             // Repeatedly copy the smaller element of both runs into the buffer
             while left_start != left_end && right_start != right_end {
-                if *left_start < *right_start {
+                if *left_start <= *right_start {
                     output
                         .copy_from_nonoverlapping(left_start as *const std::mem::MaybeUninit<T>, 1);
                     left_start = left_start.add(1);
@@ -240,6 +245,13 @@ mod tests {
             }
 
             #[test]
+            pub fn test_correct_stable_merges() {
+                if $method::is_stable() {
+                    test_correct_stable_merge::<$method>();
+                }
+            }
+
+            #[test]
             pub fn test_soundness_merges() {
                 test_soundness_merge::<$method>();
             }
@@ -264,7 +276,9 @@ mod tests {
 
         // Test random runs
         for run in 0..TEST_RUNS {
-            let mut elements: [u32; TEST_SIZE] = std::array::from_fn(|_| rng.random());
+            let mut elements: Box<[usize]> = (0..TEST_SIZE)
+                .map(|_| rng.random_range(0..usize::MAX))
+                .collect();
             let split = rng.random_range(0..TEST_SIZE);
             elements[..split].sort();
             elements[split..].sort();
@@ -280,7 +294,9 @@ mod tests {
 
         // Test random runs, split at 0 and n - 1
         for split in [0, TEST_SIZE - 1] {
-            let mut elements: [u32; TEST_SIZE] = std::array::from_fn(|_| rng.random());
+            let mut elements: Box<[usize]> = (0..TEST_SIZE)
+                .map(|_| rng.random_range(0..usize::MAX))
+                .collect();
             elements[..split].sort();
             elements[split..].sort();
 
@@ -289,6 +305,49 @@ mod tests {
             assert!(
                 elements.is_sorted(),
                 "Resulting elements were not sorted by {name} with split {split}",
+                name = std::any::type_name::<T>(),
+            );
+        }
+    }
+
+    /// Test that two runs are correctly merged and the ordering of equal elements remains stable
+    fn test_correct_stable_merge<T: MergingMethod>() {
+        let mut rng = crate::test::test_rng();
+        let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
+
+        // Test random runs
+        for run in 0..TEST_RUNS {
+            let mut elements: Box<[_]> = crate::test::IndexedOrdered::map_iter(
+                (0..TEST_SIZE).map(|_| rng.random_range(0..TEST_SIZE / 4)),
+            )
+            .collect();
+            let split = rng.random_range(0..TEST_SIZE);
+            elements[..split].sort();
+            elements[split..].sort();
+
+            T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
+
+            assert!(
+                crate::test::IndexedOrdered::is_stable_sorted(&elements),
+                "Resulting elements were not sorted by {name} in run {run}\n{elements:?}",
+                name = std::any::type_name::<T>(),
+            );
+        }
+
+        // Test random runs, split at 0 and n - 1
+        for split in [0, TEST_SIZE - 1] {
+            let mut elements: Box<[_]> = crate::test::IndexedOrdered::map_iter(
+                (0..TEST_SIZE).map(|_| rng.random_range(0..TEST_SIZE / 4)),
+            )
+            .collect();
+            elements[..split].sort();
+            elements[split..].sort();
+
+            T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
+
+            assert!(
+                crate::test::IndexedOrdered::is_stable_sorted(&elements),
+                "Resulting elements were not sorted by {name} with split {split}\n{elements:?}",
                 name = std::any::type_name::<T>(),
             );
         }

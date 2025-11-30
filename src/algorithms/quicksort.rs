@@ -81,7 +81,7 @@ fn quicksort<
     }
 }
 
-// TODO: is this right?, should this be made stable?
+// TODO: is this right?
 /// Swap the median of the three indices with the first element of the slice
 fn move_median_to_first<T: Ord>(slice: &mut [T], index1: usize, index2: usize, index3: usize) {
     let indices = &mut [index1, index2, index3];
@@ -118,18 +118,27 @@ mod tests {
     const RUNS: usize = 100;
     const TEST_SIZE: usize = 100_000;
 
+    /// Default quicksort but with `CHECK_SORTED = true`
+    fn default_quicksort_checked<T: Ord>(slice: &mut [T]) {
+        default_rng_quicksort::<_, 24, 128, true>(slice);
+    }
+
     #[test]
     fn empty() {
         crate::test::test_empty(default_quicksort);
+        crate::test::test_empty(default_quicksort_checked);
     }
 
     #[test]
     fn random() {
         crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_quicksort);
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_quicksort_checked);
     }
 
     #[test]
+    #[should_panic] // TODO: should we implement stable quicksort?
     fn random_stable() {
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_quicksort);
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_quicksort_checked);
     }
 }

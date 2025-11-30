@@ -55,10 +55,8 @@ impl Algorithm {
             Algorithm::StdUnstable => false,
             Algorithm::Insertion => true,
             Algorithm::BinaryInsertion => true,
-            // TODO: should this be stable?
             Algorithm::Quicksort => false,
-            // TODO: should this be stable?
-            Algorithm::Peeksort => false,
+            Algorithm::Peeksort => true,
         }
     }
 }
