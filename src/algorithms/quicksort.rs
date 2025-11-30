@@ -1,11 +1,44 @@
 //! The quicksort implementation
 
-use rand::Rng;
+/// The default [`super::RandomFactory`] to use
+type DefaultRngFactory = super::DefaultRngFactory;
+
+/// The default insertion sort to use
+type DefaultInsertionSort = super::insertionsort::InsertionSort;
+
+/// The quicksort [`super::Sort`]
+pub struct QuickSort<
+    R: super::RandomFactory = DefaultRngFactory,
+    I: super::Sort = DefaultInsertionSort,
+    const INSERTION_THRESHOLD: usize = 24,
+    const NINTHER_THRESHOLD: usize = 128,
+    const CHECK_SORTED: bool = false,
+>(std::marker::PhantomData<R>, std::marker::PhantomData<I>);
+
+impl<
+    R: super::RandomFactory,
+    I: super::Sort,
+    const INSERTION_THRESHOLD: usize,
+    const NINTHER_THRESHOLD: usize,
+    const CHECK_SORTED: bool,
+> super::Sort for QuickSort<R, I, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>
+{
+    const IS_STABLE: bool = false && I::IS_STABLE;
+
+    fn sort<T: Ord>(slice: &mut [T]) {
+        let mut rng = R::produce();
+
+        quicksort::<T, R::Rng, I, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(
+            slice, &mut rng,
+        );
+    }
+}
 
 /// Quicksort the given slice
 fn quicksort<
     T: Ord,
-    R: Rng,
+    R: rand::Rng,
+    I: super::Sort,
     const INSERTION_THRESHOLD: usize,
     const NINTHER_THRESHOLD: usize,
     const CHECK_SORTED: bool,
@@ -20,7 +53,7 @@ fn quicksort<
 
     // Use insertion sort for small slices
     if slice.len() <= INSERTION_THRESHOLD {
-        crate::algorithms::insertionsort::insertion_sort(slice);
+        I::sort(slice);
         return;
     }
 
@@ -30,7 +63,7 @@ fn quicksort<
     }
 
     /// Call [`move_median_to_first()`] with random indices
-    fn move_random_median_to_first<T: Ord, R: Rng>(slice: &mut [T], rng: &mut R) {
+    fn move_random_median_to_first<T: Ord, R: rand::Rng>(slice: &mut [T], rng: &mut R) {
         move_median_to_first(
             slice,
             rng.random_range(0..slice.len()),
@@ -71,10 +104,13 @@ fn quicksort<
     slice.swap(0, i);
 
     // Recurse into both partitions
-    quicksort::<_, _, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(&mut slice[..i], rng);
+    quicksort::<T, R, I, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(
+        &mut slice[..i],
+        rng,
+    );
     // This panics, other than the i = 0 case, which is why we need to check for it
     if i < slice.len() {
-        quicksort::<_, _, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(
+        quicksort::<T, R, I, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(
             &mut slice[i + 1..],
             rng,
         );
@@ -89,28 +125,6 @@ fn move_median_to_first<T: Ord>(slice: &mut [T], index1: usize, index2: usize, i
     slice.swap(0, indices[1]);
 }
 
-/// Quicksort the given slice using the default [`rand::rng()`]
-pub fn default_rng_quicksort<
-    T: Ord,
-    const INSERTION_THRESHOLD: usize,
-    const NINTHER_THRESHOLD: usize,
-    const CHECK_SORTED: bool,
->(
-    slice: &mut [T],
-) {
-    let mut rng = rand::rng();
-    quicksort::<_, _, INSERTION_THRESHOLD, NINTHER_THRESHOLD, CHECK_SORTED>(slice, &mut rng);
-}
-
-/// Quicksort the given slice, with the following default const parameters
-///
-/// - `INSERTION_THRESHOLD = 24`
-/// - `NINTHER_THRESHOLD = 128`
-/// - `CHECK_SORTED = false`
-pub fn default_quicksort<T: Ord>(slice: &mut [T]) {
-    default_rng_quicksort::<_, 24, 128, false>(slice);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,27 +132,25 @@ mod tests {
     const RUNS: usize = 100;
     const TEST_SIZE: usize = 100_000;
 
-    /// Default quicksort but with `CHECK_SORTED = true`
-    fn default_quicksort_checked<T: Ord>(slice: &mut [T]) {
-        default_rng_quicksort::<_, 24, 128, true>(slice);
-    }
+    type QuickSortChecked =
+        QuickSort<super::DefaultRngFactory, super::DefaultInsertionSort, 24, 128, true>;
 
     #[test]
     fn empty() {
-        crate::test::test_empty(default_quicksort);
-        crate::test::test_empty(default_quicksort_checked);
+        crate::test::test_empty::<QuickSort>();
+        crate::test::test_empty::<QuickSortChecked>();
     }
 
     #[test]
     fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_quicksort);
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(default_quicksort_checked);
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, QuickSort>();
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, QuickSortChecked>();
     }
 
     #[test]
     #[should_panic] // TODO: should we implement stable quicksort?
     fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_quicksort);
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(default_quicksort_checked);
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, QuickSort>();
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, QuickSortChecked>();
     }
 }

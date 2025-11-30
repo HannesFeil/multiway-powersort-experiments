@@ -106,6 +106,9 @@ impl<T> BufGuard<T> for Vec<T> {
 
 /// Specifies ways to merge two adjacent runs in a slice, given a buffer
 pub trait MergingMethod {
+    /// Whether the merging method is stable
+    const IS_STABLE: bool;
+
     /// Merge the two sorted runs `0..split_point` and `split_point..slice.len()`, potentially
     /// using `buffer`.
     fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]);
@@ -114,11 +117,6 @@ pub trait MergingMethod {
     /// or equal to `size`.
     fn required_capacity(size: usize) -> usize {
         size
-    }
-
-    /// Return if the merging method is stable
-    fn is_stable() -> bool {
-        true
     }
 }
 
@@ -130,6 +128,8 @@ pub trait MergingMethod {
 pub struct CopyBoth;
 
 impl MergingMethod for CopyBoth {
+    const IS_STABLE: bool = true;
+
     fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
         if slice.is_empty() {
             return;
@@ -246,7 +246,7 @@ mod tests {
 
             #[test]
             pub fn test_correct_stable_merges() {
-                if $method::is_stable() {
+                if $method::IS_STABLE {
                     test_correct_stable_merge::<$method>();
                 }
             }

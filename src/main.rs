@@ -22,9 +22,9 @@ fn main() {
         "Running measurements for the following algorithms:\n{algs}",
         algs = algorithms
             .iter()
-            .map(|a| a.to_string())
+            .map(|a| format!("{a}: stable = {stable}", stable = a.is_stable()))
             .collect::<Vec<_>>()
-            .join(", ")
+            .join(",\n")
     );
     println!("Runs: {runs}, Slice size: {size}, Data type: {data}");
 
@@ -76,6 +76,8 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
 
     let mut stats: rolling_stats::Stats<f64> = rolling_stats::Stats::new();
 
+    let bar = indicatif::ProgressBar::new(runs as u64);
+
     for run in 0..=runs {
         let mut data = D::initialize(size, rng);
 
@@ -93,6 +95,8 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
             samples.push(elapsed);
             // TODO: is this cast fine?
             stats.update(elapsed.as_millis() as f64);
+
+            bar.inc(1);
         }
     }
 

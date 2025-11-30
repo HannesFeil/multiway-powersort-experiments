@@ -2,8 +2,27 @@
 
 // TODO: consider working with pointers/unsafe? of course there are a lot of in bounds checks here
 
+/// The insertion [`super::Sort`]
+pub struct InsertionSort<const BINARY: bool = false>;
+
+impl<const BINARY: bool> super::Sort for InsertionSort<BINARY> {
+    const IS_STABLE: bool = true;
+
+    fn sort<T: Ord>(slice: &mut [T]) {
+        if slice.len() < 2 {
+            return;
+        }
+
+        if BINARY {
+            insertion_sort_with_partition(slice, 1);
+        } else {
+            binary_insertion_sort_with_partition(slice, 1);
+        }
+    }
+}
+
 /// Sort slice using insertion sort, assuming that `slice[0..partition]` is already in order
-pub fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
+fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
     assert!(
         (0..slice.len()).contains(&partition_point),
         "Partition point needs to be in bounds"
@@ -21,16 +40,8 @@ pub fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: u
     }
 }
 
-/// Sort the slice using insertion sort
-pub fn insertion_sort<T: Ord>(slice: &mut [T]) {
-    if slice.len() < 2 {
-        return;
-    }
-    insertion_sort_with_partition(slice, 1);
-}
-
 /// Sort slice using binary insertion sort, assuming that `slice[0..partition]` is already in order
-pub fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
+fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
     assert!(
         (0..slice.len()).contains(&partition_point),
         "Partition point needs to be in bounds"
@@ -51,14 +62,6 @@ pub fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_p
     }
 }
 
-/// Sort the slice using insertion sort
-pub fn binary_insertion_sort<T: Ord>(slice: &mut [T]) {
-    if slice.len() < 2 {
-        return;
-    }
-    binary_insertion_sort_with_partition(slice, 1);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,19 +71,19 @@ mod tests {
 
     #[test]
     pub fn empty() {
-        crate::test::test_empty(insertion_sort);
-        crate::test::test_empty(binary_insertion_sort);
+        crate::test::test_empty::<InsertionSort>();
+        crate::test::test_empty::<InsertionSort<true>>();
     }
 
     #[test]
     pub fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(insertion_sort);
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE>(binary_insertion_sort);
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, InsertionSort>();
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, InsertionSort<true>>();
     }
 
     #[test]
     pub fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(insertion_sort);
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE>(binary_insertion_sort);
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, InsertionSort>();
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, InsertionSort<true>>();
     }
 }
