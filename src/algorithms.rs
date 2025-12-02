@@ -1,11 +1,11 @@
 //! Contains various sorting algorithms see e.g. [`Sort`] and [`Algorithm`].
 
-use crate::algorithms::merging::BufGuard;
-
+pub mod bottom_up_mergesort;
 pub mod insertionsort;
 pub mod merging;
 pub mod peeksort;
 pub mod quicksort;
+pub mod top_down_mergesort;
 
 /// A trait to simplify the algorithm definitions
 pub trait Sort {
@@ -54,7 +54,7 @@ impl RandomFactory for DefaultRngFactory {
 /// A trait for modulizing [`merging::BufGuard`]s
 pub trait BufGuardFactory {
     /// The corresponding guard type
-    type Guard<T>: BufGuard<T>;
+    type Guard<T>: merging::BufGuard<T>;
 }
 
 /// The factory producing `Vec<T>` types

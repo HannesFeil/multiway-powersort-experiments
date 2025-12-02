@@ -3,6 +3,7 @@ use rand::SeedableRng as _;
 
 mod algorithms;
 mod data;
+
 #[cfg(test)]
 mod test;
 
@@ -188,6 +189,10 @@ mod input {
         Quicksort: quicksort::QuickSort,
         /// Peeksort
         Peeksort: peeksort::PeekSort,
+        /// Bottom-up mergesort
+        BottomUpMergesort: bottom_up_mergesort::BottomUpMergesort,
+        /// Top-down mergesort
+        TopDownMergesort: top_down_mergesort::TopDownMergesort,
     }
 
     impl std::fmt::Display for Algorithm {

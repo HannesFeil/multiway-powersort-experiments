@@ -6,13 +6,22 @@ type DefaultRngFactory = super::DefaultRngFactory;
 /// The default insertion sort to use
 type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
+/// The default `INSERTION_THRESHOLD` to use
+pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
+
+/// The default `NINTHER_THRESHOLD` to use
+pub const DEFAULT_NINTHER_THRESHOLD: usize = 128;
+
+/// The default `CHECK_SORTED` to use
+pub const DEFAULT_CHECK_SORTED: bool = false;
+
 /// The quicksort [`super::Sort`]
 pub struct QuickSort<
     R: super::RandomFactory = DefaultRngFactory,
     I: super::Sort = DefaultInsertionSort,
-    const INSERTION_THRESHOLD: usize = 24,
-    const NINTHER_THRESHOLD: usize = 128,
-    const CHECK_SORTED: bool = false,
+    const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
+    const NINTHER_THRESHOLD: usize = DEFAULT_NINTHER_THRESHOLD,
+    const CHECK_SORTED: bool = DEFAULT_CHECK_SORTED,
 >(std::marker::PhantomData<R>, std::marker::PhantomData<I>);
 
 impl<
@@ -132,8 +141,13 @@ mod tests {
     const RUNS: usize = 100;
     const TEST_SIZE: usize = 100_000;
 
-    type QuickSortChecked =
-        QuickSort<super::DefaultRngFactory, super::DefaultInsertionSort, 24, 128, true>;
+    type QuickSortChecked = QuickSort<
+        DefaultRngFactory,
+        DefaultInsertionSort,
+        DEFAULT_INSERTION_THRESHOLD,
+        DEFAULT_NINTHER_THRESHOLD,
+        true,
+    >;
 
     #[test]
     fn empty() {
