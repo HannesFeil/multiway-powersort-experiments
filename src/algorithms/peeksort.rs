@@ -3,21 +3,27 @@
 use crate::algorithms::merging::BufGuard as _;
 
 /// The default insertion sort to use
-type DefaultInsertionSort = super::insertionsort::InsertionSort;
+pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
 /// The default [`super::merging::MergingMethod`] to use
-type DefaultMergingMethod = super::merging::CopyBoth;
+pub type DefaultMergingMethod = super::merging::CopyBoth;
 
 /// The default BufGuardFactory to use
-type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
+pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
+
+/// The default `INSERTION_THRESHOLD` to use
+pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
+
+/// The default `ONLY_INCREASING_RUNS` to use
+pub const DEFAULT_ONLY_INCREASING_RUNS: bool = true;
 
 /// The peeksort [`super::Sort`]
 pub struct PeekSort<
     I: super::Sort = DefaultInsertionSort,
     M: super::merging::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
-    const INSERTION_THRESHOLD: usize = 24,
-    const ONLY_INCREASING_RUNS: bool = true,
+    const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
+    const ONLY_INCREASING_RUNS: bool = DEFAULT_ONLY_INCREASING_RUNS,
 >(
     std::marker::PhantomData<I>,
     std::marker::PhantomData<M>,
@@ -184,10 +190,10 @@ mod tests {
 
     /// Default peeksort but allowing decreasing runs
     type PeekSortDecreasing = PeekSort<
-        super::DefaultInsertionSort,
-        super::DefaultMergingMethod,
-        super::DefaultBufGuardFactory,
-        24,
+        DefaultInsertionSort,
+        DefaultMergingMethod,
+        DefaultBufGuardFactory,
+        DEFAULT_INSERTION_THRESHOLD,
         false,
     >;
 

@@ -2,8 +2,11 @@
 
 // TODO: consider working with pointers/unsafe? of course there are a lot of in bounds checks here
 
+/// The default `BINARY` parameter for `InsertionSort`
+pub const DEFAULT_BINARY: bool = false;
+
 /// The insertion [`super::Sort`]
-pub struct InsertionSort<const BINARY: bool = false>;
+pub struct InsertionSort<const BINARY: bool = DEFAULT_BINARY>;
 
 impl<const BINARY: bool> super::Sort for InsertionSort<BINARY> {
     const IS_STABLE: bool = true;
