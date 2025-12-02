@@ -66,7 +66,7 @@ fn main() {
 /// - size: The size of the slices to sort
 /// - rng: The rng used for sampling the data
 fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
-    algorithm: algorithms::Algorithm,
+    algorithm: input::Algorithm,
     runs: usize,
     size: usize,
     rng: &mut impl rand::Rng,
@@ -105,6 +105,9 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
 
 /// Command line input handling
 mod input {
+    use crate::algorithms::*;
+    use clap::ValueEnum as _;
+
     /// Command line arguments
     #[derive(clap::Parser)]
     pub struct Args {
@@ -125,9 +128,77 @@ mod input {
         pub seed: Option<u128>,
     }
 
+    /// Define the sorting algorithms available to the user
+    macro_rules! algorithms {
+        (
+            $(
+                $(
+                    #[$attr:meta]
+                )*
+                $name:ident : $sort:ty
+            ),*
+            $(,)?
+        ) => {
+            /// The different sorting algorithms
+            #[derive(Debug, Clone, Copy, clap::ValueEnum, Hash, PartialEq, Eq)]
+            pub enum Algorithm {
+                $(
+                    $(
+                        #[$attr]
+                    )*
+                    $name,
+                )*
+            }
+
+            // Delegate each variant to the corresponding Sort type
+            impl Algorithm {
+                /// The sort function
+                pub fn sorter<T: Ord>(self) -> fn(&mut [T]) {
+                    match self {
+                        $(
+                            Self::$name => <$sort>::sort,
+                        )*
+                    }
+                }
+
+                /// Return whether the sort is stable
+                pub fn is_stable(self) -> bool {
+                    use crate::algorithms::Sort as _;
+
+                    match self {
+                        $(
+                            Self::$name => <$sort>::IS_STABLE,
+                        )*
+                    }
+                }
+            }
+        };
+    }
+
+    algorithms! {
+        /// The algorithm used by the rust std library
+        Std: StdSort,
+        /// The unstable algorithm used by the rust std library
+        StdUnstable: StdSort<false>,
+        /// Insertion sort
+        Insertion: insertionsort::InsertionSort,
+        /// Binary Insertion sort
+        BinaryInsertion: insertionsort::InsertionSort<true>,
+        /// Quicksort
+        Quicksort: quicksort::QuickSort,
+        /// Peeksort
+        Peeksort: peeksort::PeekSort,
+    }
+
+    impl std::fmt::Display for Algorithm {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.to_possible_value().unwrap().get_name())
+        }
+    }
+
     /// Set of sorting [`Algorithms`](crate::algorithms::Algorithm) to run
     #[derive(Debug, Clone)]
-    pub struct Algorithms(pub std::collections::HashSet<crate::algorithms::Algorithm>);
+    pub struct Algorithms(pub std::collections::HashSet<Algorithm>);
 
     impl clap::builder::ValueParserFactory for Algorithms {
         type Parser = AlgorithmsParser;
@@ -139,7 +210,7 @@ mod input {
 
     /// [`Parser`](clap::builder::TypedValueParser) for [`Algorithms`]
     #[derive(Clone)]
-    pub struct AlgorithmsParser(clap::builder::EnumValueParser<crate::algorithms::Algorithm>);
+    pub struct AlgorithmsParser(clap::builder::EnumValueParser<Algorithm>);
 
     impl clap::builder::TypedValueParser for AlgorithmsParser {
         type Value = Algorithms;
