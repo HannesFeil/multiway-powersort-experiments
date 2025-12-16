@@ -157,7 +157,7 @@ mod input {
                 pub fn sorter<T: Ord>(self) -> fn(&mut [T]) {
                     match self {
                         $(
-                            Self::$name => <$sort>::sort,
+                            Self::$name => <$sort as crate::algorithms::Sort>::sort,
                         )*
                     }
                 }
@@ -168,7 +168,7 @@ mod input {
 
                     match self {
                         $(
-                            Self::$name => <$sort>::IS_STABLE,
+                            Self::$name => <$sort as crate::algorithms::Sort>::IS_STABLE,
                         )*
                     }
                 }

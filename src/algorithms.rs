@@ -5,6 +5,7 @@ pub mod insertionsort;
 pub mod merging;
 pub mod peeksort;
 pub mod quicksort;
+pub mod timsort;
 pub mod top_down_mergesort;
 
 /// A trait to simplify the algorithm definitions
@@ -14,6 +15,27 @@ pub trait Sort {
 
     /// Sort the given slice
     fn sort<T: Ord>(slice: &mut [T]);
+}
+
+/// Defines a Sort that expects slices with a first partition already sorted
+pub trait PostfixSort {
+    /// Whether [`Self::sort`] preserves the order of equal elements
+    const IS_STABLE: bool;
+
+    /// Sort the given slice under the assumption, that `slice[..split_point]` is already sorted
+    fn sort<T: Ord>(slice: &mut [T], split_point: usize);
+}
+
+impl<S: PostfixSort> Sort for S {
+    const IS_STABLE: bool = Self::IS_STABLE;
+
+    fn sort<T: Ord>(slice: &mut [T]) {
+        if slice.is_empty() {
+            return;
+        }
+
+        Self::sort(slice, 1);
+    }
 }
 
 /// The Standard library sort

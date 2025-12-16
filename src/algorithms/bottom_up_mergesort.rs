@@ -49,43 +49,40 @@ impl<
         let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
 
         // Delegate to helper function
-        bottom_up_mergesort::<T, I, M, INSERTION_THRESHOLD, CHECK_SORTED>(
-            slice,
-            buffer.as_uninit_slice_mut(),
-        );
+        Self::bottom_up_mergesort(slice, buffer.as_uninit_slice_mut());
     }
 }
 
-/// The actual bottom-up mergesort implementation, sorts `slice`
-fn bottom_up_mergesort<
-    T: Ord,
+impl<
     I: super::Sort,
     M: super::merging::MergingMethod,
+    B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
->(
-    slice: &mut [T],
-    buffer: &mut [std::mem::MaybeUninit<T>],
-) {
-    if INSERTION_THRESHOLD > 1 {
-        for chunk in slice.chunks_mut(INSERTION_THRESHOLD) {
-            I::sort(chunk);
-        }
-
-        let mut merge_size = INSERTION_THRESHOLD;
-        while merge_size < slice.len() {
-            let mut start = 0;
-
-            while start < slice.len() - merge_size {
-                if !CHECK_SORTED || slice[start + merge_size] < slice[start + merge_size - 1] {
-                    let end = std::cmp::min(start + 2 * merge_size, slice.len());
-                    M::merge(&mut slice[start..end], merge_size, buffer);
-                }
-
-                start += 2 * merge_size;
+> BottomUpMergesort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
+{
+    /// The actual bottom-up mergesort implementation, sorts `slice`
+    fn bottom_up_mergesort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
+        if INSERTION_THRESHOLD > 1 {
+            for chunk in slice.chunks_mut(INSERTION_THRESHOLD) {
+                I::sort(chunk);
             }
 
-            merge_size *= 2;
+            let mut merge_size = INSERTION_THRESHOLD;
+            while merge_size < slice.len() {
+                let mut start = 0;
+
+                while start < slice.len() - merge_size {
+                    if !CHECK_SORTED || slice[start + merge_size] < slice[start + merge_size - 1] {
+                        let end = std::cmp::min(start + 2 * merge_size, slice.len());
+                        M::merge(&mut slice[start..end], merge_size, buffer);
+                    }
+
+                    start += 2 * merge_size;
+                }
+
+                merge_size *= 2;
+            }
         }
     }
 }
