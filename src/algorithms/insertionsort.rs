@@ -8,59 +8,63 @@ pub const DEFAULT_BINARY: bool = false;
 /// The insertion [`super::Sort`]
 pub struct InsertionSort<const BINARY: bool = DEFAULT_BINARY>;
 
-impl<const BINARY: bool> super::Sort for InsertionSort<BINARY> {
+impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
     const IS_STABLE: bool = true;
 
-    fn sort<T: Ord>(slice: &mut [T]) {
+    fn sort<T: Ord>(slice: &mut [T], split_point: usize) {
         if slice.len() < 2 {
             return;
         }
 
         if BINARY {
-            insertion_sort_with_partition(slice, 1);
+            Self::insertion_sort_with_partition(slice, split_point);
         } else {
-            binary_insertion_sort_with_partition(slice, 1);
+            Self::binary_insertion_sort_with_partition(slice, split_point);
         }
     }
 }
 
-/// Sort slice using insertion sort, assuming that `slice[0..partition]` is already in order
-fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
-    assert!(
-        (0..slice.len()).contains(&partition_point),
-        "Partition point needs to be in bounds"
-    );
+impl<const BINARY: bool> InsertionSort<BINARY> {
+    /// Sort slice using insertion sort, assuming that `slice[0..partition]` is already in order
+    fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
+        assert!(
+            (0..slice.len()).contains(&partition_point),
+            "Partition point needs to be in bounds"
+        );
+        debug_assert!(slice[..partition_point].is_sorted());
 
-    for i in partition_point..slice.len() {
-        for j in (0..i).rev() {
-            if slice[j + 1] < slice[j] {
-                // TODO: swapping is easiest, otherwise I'd have to work with unsafe I think
-                slice.swap(j + 1, j);
-            } else {
-                break;
+        for i in partition_point..slice.len() {
+            for j in (0..i).rev() {
+                if slice[j + 1] < slice[j] {
+                    // TODO: swapping is easiest, otherwise I'd have to work with unsafe I think
+                    slice.swap(j + 1, j);
+                } else {
+                    break;
+                }
             }
         }
     }
-}
 
-/// Sort slice using binary insertion sort, assuming that `slice[0..partition]` is already in order
-fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
-    assert!(
-        (0..slice.len()).contains(&partition_point),
-        "Partition point needs to be in bounds"
-    );
+    /// Sort slice using binary insertion sort, assuming that `slice[0..partition]` is already in order
+    fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
+        assert!(
+            (0..slice.len()).contains(&partition_point),
+            "Partition point needs to be in bounds"
+        );
+        debug_assert!(slice[..partition_point].is_sorted());
 
-    for i in partition_point..slice.len() {
-        let mut j = slice[0..i]
-            .binary_search(&slice[i])
-            .unwrap_or_else(|index| index);
-        // Necessary for stability, TODO: is this correct w.r. c++ impl?
-        while j < i && slice[j] == slice[i] {
-            j += 1;
-        }
+        for i in partition_point..slice.len() {
+            let mut j = slice[0..i]
+                .binary_search(&slice[i])
+                .unwrap_or_else(|index| index);
+            // Necessary for stability, TODO: is this correct w.r. c++ impl?
+            while j < i && slice[j] == slice[i] {
+                j += 1;
+            }
 
-        for p in (j..i).rev() {
-            slice.swap(p, p + 1);
+            for p in (j..i).rev() {
+                slice.swap(p, p + 1);
+            }
         }
     }
 }

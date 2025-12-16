@@ -49,35 +49,32 @@ impl<
         let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
 
         // Delegate to helper function
-        top_down_mergesort::<T, I, M, INSERTION_THRESHOLD, CHECK_SORTED>(
-            slice,
-            buffer.as_uninit_slice_mut(),
-        );
+        Self::top_down_mergesort(slice, buffer.as_uninit_slice_mut());
     }
 }
 
-/// The actual bottom-up mergesort implementation, sorts `slice`
-fn top_down_mergesort<
-    T: Ord,
+impl<
     I: super::Sort,
     M: super::merging::MergingMethod,
+    B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
->(
-    slice: &mut [T],
-    buffer: &mut [std::mem::MaybeUninit<T>],
-) {
-    if slice.len() <= INSERTION_THRESHOLD {
-        I::sort(slice);
-    } else {
-        let middle = slice.len() / 2;
+> TopDownMergesort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
+{
+    /// The actual bottom-up mergesort implementation, sorts `slice`
+    fn top_down_mergesort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
+        if slice.len() <= INSERTION_THRESHOLD {
+            I::sort(slice);
+        } else {
+            let middle = slice.len() / 2;
 
-        let (left, right) = slice.split_at_mut(middle);
-        top_down_mergesort::<T, I, M, INSERTION_THRESHOLD, CHECK_SORTED>(left, buffer);
-        top_down_mergesort::<T, I, M, INSERTION_THRESHOLD, CHECK_SORTED>(right, buffer);
+            let (left, right) = slice.split_at_mut(middle);
+            Self::top_down_mergesort(left, buffer);
+            Self::top_down_mergesort(right, buffer);
 
-        if !CHECK_SORTED || slice[middle] < slice[middle - 1] {
-            M::merge(slice, middle, buffer);
+            if !CHECK_SORTED || slice[middle] < slice[middle - 1] {
+                M::merge(slice, middle, buffer);
+            }
         }
     }
 }
