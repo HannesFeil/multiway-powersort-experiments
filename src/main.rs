@@ -164,8 +164,6 @@ mod input {
 
                 /// Return whether the sort is stable
                 pub fn is_stable(self) -> bool {
-                    use crate::algorithms::Sort as _;
-
                     match self {
                         $(
                             Self::$name => <$sort as crate::algorithms::Sort>::IS_STABLE,
