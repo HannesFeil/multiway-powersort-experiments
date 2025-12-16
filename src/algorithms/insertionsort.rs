@@ -54,13 +54,7 @@ impl<const BINARY: bool> InsertionSort<BINARY> {
         debug_assert!(slice[..partition_point].is_sorted());
 
         for i in partition_point..slice.len() {
-            let mut j = slice[0..i]
-                .binary_search(&slice[i])
-                .unwrap_or_else(|index| index);
-            // Necessary for stability, TODO: is this correct w.r. c++ impl?
-            while j < i && slice[j] == slice[i] {
-                j += 1;
-            }
+            let j = slice[..i].partition_point(|x| x <= &slice[i]);
 
             for p in (j..i).rev() {
                 slice.swap(p, p + 1);

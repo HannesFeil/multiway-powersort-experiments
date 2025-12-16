@@ -171,14 +171,14 @@ impl MergingMethod for CopyBoth {
             // Repeatedly copy the smaller element of both runs into the buffer
             while left_start != left_end && right_start != right_end {
                 if *left_start <= *right_start {
-                    output
-                        .copy_from_nonoverlapping(left_start as *const std::mem::MaybeUninit<T>, 1);
+                    (*output)
+                        .as_mut_ptr()
+                        .copy_from_nonoverlapping(left_start, 1);
                     left_start = left_start.add(1);
                 } else {
-                    output.copy_from_nonoverlapping(
-                        right_start as *const std::mem::MaybeUninit<T>,
-                        1,
-                    );
+                    (*output)
+                        .as_mut_ptr()
+                        .copy_from_nonoverlapping(right_start, 1);
                     right_start = right_start.add(1);
                 }
 
@@ -187,12 +187,16 @@ impl MergingMethod for CopyBoth {
 
             // Copy the rest of the remaining run into the buffer
             while left_start < left_end {
-                output.copy_from_nonoverlapping(left_start as *const std::mem::MaybeUninit<T>, 1);
+                (*output)
+                    .as_mut_ptr()
+                    .copy_from_nonoverlapping(left_start, 1);
                 left_start = left_start.add(1);
                 output = output.add(1);
             }
             while right_start < right_end {
-                output.copy_from_nonoverlapping(right_start as *const std::mem::MaybeUninit<T>, 1);
+                (*output)
+                    .as_mut_ptr()
+                    .copy_from_nonoverlapping(right_start, 1);
                 right_start = right_start.add(1);
                 output = output.add(1);
             }
@@ -202,7 +206,7 @@ impl MergingMethod for CopyBoth {
         // slice, again regarding the same layout invariant for T and MaybeUninit<T>. (see above)
         unsafe {
             std::ptr::copy_nonoverlapping(
-                buffer.as_ptr() as *mut T,
+                (*buffer.as_ptr()).as_ptr(),
                 slice.as_mut_ptr(),
                 slice.len(),
             );
@@ -235,24 +239,24 @@ mod tests {
         };
         (@single $method:ident) => {
             #[test]
-            pub fn test_empty_merges() {
+            fn test_empty_merges() {
                 test_empty_merge::<$method>();
             }
 
             #[test]
-            pub fn test_correct_merges() {
+            fn test_correct_merges() {
                 test_correct_merge::<$method>();
             }
 
             #[test]
-            pub fn test_correct_stable_merges() {
-                if $method::IS_STABLE {
+            fn test_correct_stable_merges() {
+                if <$method>::IS_STABLE {
                     test_correct_stable_merge::<$method>();
                 }
             }
 
             #[test]
-            pub fn test_soundness_merges() {
+            fn test_soundness_merges() {
                 test_soundness_merge::<$method>();
             }
         };
