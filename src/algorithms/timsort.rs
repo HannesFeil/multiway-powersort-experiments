@@ -83,7 +83,7 @@ impl<
             if run_length < min_run {
                 let force = std::cmp::min(n, min_run);
                 I::sort(&mut slice[start..start + force], run_length);
-                run_length = min_run;
+                run_length = force;
             }
 
             pending_runs.push(Run {
