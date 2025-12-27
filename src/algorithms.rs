@@ -5,6 +5,7 @@ pub mod insertionsort;
 pub mod merging;
 pub mod peeksort;
 pub mod quicksort;
+pub mod timsort;
 pub mod top_down_mergesort;
 
 /// A trait to simplify the algorithm definitions
