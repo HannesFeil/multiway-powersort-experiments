@@ -191,6 +191,8 @@ mod input {
         BottomUpMergesort: bottom_up_mergesort::BottomUpMergesort,
         /// Top-down mergesort
         TopDownMergesort: top_down_mergesort::TopDownMergesort,
+        /// Timsort
+        Timsort: timsort::TimSort,
     }
 
     impl std::fmt::Display for Algorithm {
