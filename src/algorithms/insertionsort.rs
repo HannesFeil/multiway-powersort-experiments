@@ -28,7 +28,7 @@ impl<const BINARY: bool> InsertionSort<BINARY> {
     /// Sort slice using insertion sort, assuming that `slice[0..partition]` is already in order
     fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
         assert!(
-            (0..slice.len()).contains(&partition_point),
+            (0..=slice.len()).contains(&partition_point),
             "Partition point needs to be in bounds"
         );
         debug_assert!(slice[..partition_point].is_sorted());
@@ -48,7 +48,7 @@ impl<const BINARY: bool> InsertionSort<BINARY> {
     /// Sort slice using binary insertion sort, assuming that `slice[0..partition]` is already in order
     fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
         assert!(
-            (0..slice.len()).contains(&partition_point),
+            (0..=slice.len()).contains(&partition_point),
             "Partition point needs to be in bounds"
         );
         debug_assert!(slice[..partition_point].is_sorted());
