@@ -442,7 +442,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
 
                     // Copy back to slice
                     std::ptr::copy_nonoverlapping(
-                        (*buffer.as_ptr()).as_ptr(),
+                        buffer.as_ptr() as *const T,
                         slice.as_mut_ptr(),
                         slice.len(),
                     );
@@ -582,7 +582,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
 mod tests {
     use super::*;
 
-    use rand::Rng as _;
+    use rand::{Rng as _, RngCore};
 
     /// How big the test arrays should be
     const TEST_SIZE: usize = 100;
@@ -728,29 +728,35 @@ mod tests {
         let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
         let mut maybe_panicking_buffer =
             <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
+        let mut maybe_panicking_random_buffer =
+            <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
 
         // Test random runs
         for _ in 0..TEST_RUNS {
             // RandomOrdered elements
             let mut elements: Box<[crate::test::RandomOrdered]> =
-                crate::test::RandomOrdered::new_iter(crate::test::TEST_SEED)
+                crate::test::RandomOrdered::new_iter(rng.next_u64())
                     .take(TEST_SIZE)
                     .collect();
             let split = rng.random_range(0..TEST_SIZE);
 
-            T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
+            }));
 
             drop(elements);
 
             // MaybePanickingOrdered elements
-            let mut elements: Box<
-                [crate::test::MaybePanickingOrdered<TEST_SIZE, crate::test::RandomOrdered>],
-            > = crate::test::MaybePanickingOrdered::map_iter(
-                crate::test::RandomOrdered::new_iter(crate::test::TEST_SEED).take(TEST_SIZE),
-                crate::test::TEST_SEED,
-            )
-            .collect();
+            let mut elements: Box<[u32]> = std::iter::repeat_with(|| rng.random())
+                .take(TEST_SIZE)
+                .collect();
             let split = rng.random_range(0..TEST_SIZE);
+            elements[..split].sort();
+            elements[split..].sort();
+
+            let mut elements: Box<[crate::test::MaybePanickingOrdered<TEST_SIZE, u32>]> =
+                crate::test::MaybePanickingOrdered::map_iter(elements.into_iter(), rng.next_u64())
+                    .collect();
 
             // The types are not actually unwind safe but must not trigger UB anyway
             let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -758,6 +764,24 @@ mod tests {
                     &mut elements,
                     split,
                     maybe_panicking_buffer.as_uninit_slice_mut(),
+                );
+            }));
+
+            // MaybePanickingOrdered RandomOrdered elements
+            let mut elements: Box<
+                [crate::test::MaybePanickingOrdered<TEST_SIZE, crate::test::RandomOrdered>],
+            > = crate::test::MaybePanickingOrdered::map_iter(
+                crate::test::RandomOrdered::new_iter(rng.next_u64()).take(TEST_SIZE),
+                crate::test::TEST_SEED,
+            )
+            .collect();
+
+            // The types are not actually unwind safe but must not trigger UB anyway
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                T::merge(
+                    &mut elements,
+                    split,
+                    maybe_panicking_random_buffer.as_uninit_slice_mut(),
                 );
             }));
 
