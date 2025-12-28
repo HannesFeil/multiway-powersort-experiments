@@ -120,89 +120,44 @@ pub trait MergingMethod {
     }
 }
 
-mod pointer_range {
-    /// A sequential pointer range, pointing to a slice
-    pub(super) struct PointerRange<'a, T>(
-        /// The backing range, start can never be larger then end
-        std::ops::Range<*mut T>,
-        /// A lifetime marker used to tie this range to a slice reference
-        std::marker::PhantomData<&'a mut ()>,
-    );
-
-    impl<'a, T> From<&'a mut [T]> for PointerRange<'a, T> {
-        fn from(value: &'a mut [T]) -> Self {
-            Self(value.as_mut_ptr_range(), std::marker::PhantomData)
-        }
-    }
-
-    impl<'a, T> PointerRange<'a, T> {
-        /// Returns whether this pointer range is empty
-        pub fn is_empty(&self) -> bool {
-            self.0.is_empty()
-        }
-
-        /// Returns the inclusive start pointer of this range
-        pub fn start(&self) -> *mut T {
-            self.0.start
-        }
-
-        /// Returns the exclusive end pointer of this range
-        pub fn end(&self) -> *mut T {
-            self.0.end
-        }
-
-        /// Returns the length of this range
-        pub fn len(&self) -> usize {
-            // SAFETY: self.0.end can never be less than self.0.start
-            unsafe { self.0.end.offset_from_unsigned(self.0.start) }
-        }
-    }
-
-    /// Copy `count` elements from `src` to `dst` and advances both ranges (adding `count` to their
-    /// start)
-    ///
-    /// # Safety
-    /// The length of both `src` and `dst` has to be greater or equal to `count`
-    ///
-    /// Additional safety concerns regaring [`std::ptr::copy_nonoverlapping()`] also apply
-    pub unsafe fn uninit_copy_prefix_and_advance<T>(
-        src: &mut PointerRange<T>,
-        dst: &mut PointerRange<std::mem::MaybeUninit<T>>,
+mod slice {
+    /// Copies the first `count` elements from `src` to `dst` and returns the slices with the
+    /// prefix stripped, e.g. `(&src[count..], &mut dst[count..])`
+    #[must_use]
+    pub(super) fn copy_prefix_to_uninit<'a, 'b, T>(
+        src: &'a [T],
+        dst: &'b mut [std::mem::MaybeUninit<T>],
         count: usize,
-    ) {
-        debug_assert!(src.len() >= count && dst.len() >= count);
+    ) -> (&'a [T], &'b mut [std::mem::MaybeUninit<T>]) {
+        assert!(src.len() >= count && dst.len() >= count);
 
-        // SAFETY: See function documentation. The cast as `*mut T` is allowed because
-        // of the safety requirements for [`std::mem::MaybeUninit`]
+        // SAFETY: We checked that src and dst are long enough.
+        // The writing is valid since MaybeUninit<T> has the same layout, size and ABI as as T and
+        // elements in [T] are guaranteed to be laid out sequentially in memory
+        // (see https://doc.rust-lang.org/reference/type-layout.html#slice-layout)).
+        //
+        // Additionally the owner of dst is responsible for not causing UB when reading non Copy
+        // elements.
         unsafe {
-            std::ptr::copy_nonoverlapping(src.0.start, dst.0.start as *mut T, count);
-            src.0.start = src.0.start.add(count);
-            dst.0.start = dst.0.start.add(count);
+            std::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr() as *mut T, count);
         }
+
+        (&src[count..], &mut dst[count..])
     }
 
-    /// Copy `count` elements from `src` to `dst` and shrinks both ranges (subtracting `count` from
-    /// their ends)
-    ///
-    /// # Safety
-    /// The length of both `src` and `dst` has to be greater or equal to `count`
-    ///
-    /// Additional safety concerns regaring [`std::ptr::copy_nonoverlapping()`] also apply
-    pub unsafe fn uninit_copy_suffix_and_shrink<T>(
-        src: &mut PointerRange<T>,
-        dst: &mut PointerRange<std::mem::MaybeUninit<T>>,
+    /// Copies the first `count` elements from `src` to `dst` and returns the slices with the
+    /// prefix stripped, e.g. `(&mut src[count..], &mut dst[count..])`
+    #[must_use]
+    pub(super) fn copy_mut_prefix_to_uninit<'a, 'b, T>(
+        src: &'a mut [T],
+        dst: &'b mut [std::mem::MaybeUninit<T>],
         count: usize,
-    ) {
-        debug_assert!(src.len() >= count && dst.len() >= count);
+    ) -> (&'a mut [T], &'b mut [std::mem::MaybeUninit<T>]) {
+        assert!(src.len() >= count && dst.len() >= count);
 
-        // SAFETY: See function documentation. The cast as `*mut T` is allowed because
-        // of the safety requirements for [`std::mem::MaybeUninit`]
-        unsafe {
-            src.0.end = src.0.end.sub(count);
-            dst.0.end = dst.0.end.sub(count);
+        let _ = copy_prefix_to_uninit(src, dst, count);
 
-            std::ptr::copy_nonoverlapping(src.0.end, dst.0.end as *mut T, count);
-        }
+        (&mut src[count..], &mut dst[count..])
     }
 }
 
@@ -230,50 +185,36 @@ impl MergingMethod for CopyBoth {
             "Split points needs to be in bounds"
         );
 
-        {
-            let mut output: pointer_range::PointerRange<_> =
-                (&mut (&mut *buffer)[..slice.len()]).into();
-            let (left, right) = slice.split_at_mut(split_point);
-            let mut left: pointer_range::PointerRange<T> = left.into();
-            let mut right: pointer_range::PointerRange<T> = right.into();
+        // SAFETY: We make sure to copy each element from left and right into buffer exactly once,
+        // so that buffer ends up a permutation (sorted) of slice. Therefor at the end we may
+        // assume slice.len() elements in buffer are initialized and may be copied back into slice
+        // without duplication.
+        unsafe {
+            let mut output = &mut *buffer;
+            let (mut left, mut right) = slice.split_at(split_point);
+
+            // Repeatedly copy the smaller element of both runs into the buffer
+            while !left.is_empty() && !right.is_empty() {
+                if left.first().unwrap() <= right.first().unwrap() {
+                    (left, output) = slice::copy_prefix_to_uninit(left, output, 1);
+                } else {
+                    (right, output) = slice::copy_prefix_to_uninit(right, output, 1);
+                }
+            }
+
+            // Copy the rest of the remaining run into the buffer
+            if !left.is_empty() {
+                (_, output) = slice::copy_prefix_to_uninit(left, output, left.len());
+            }
+            if !right.is_empty() {
+                (_, _) = slice::copy_prefix_to_uninit(right, output, right.len());
+            }
 
             // NOTE: We copy after the merging as opposed to before, to prevent inconsistent
             // state which could occur when panicking on merging into slice
-
-            // SAFETY: All pointers from slice are kept in bounds of their respective range.
-            // Since it is assumed that slice.len() <= buffer.len() and in total slice.len()
-            // elements are written into buffer one by one, these accesses are guaranteed to be
-            // in bounds as well. The writing is valid since MaybeUninit<T> has the same layout,
-            // size and ABI as as T and elements in [T] are guaranteed to be laid out sequentially
-            // in memory (see https://doc.rust-lang.org/reference/type-layout.html#slice-layout)).
             //
-            // Additionally each element is written into buffer exactly once,
-            // so that buffer ends up as a permutation of slice.
-            unsafe {
-                // Repeatedly copy the smaller element of both runs into the buffer
-                while !left.is_empty() && !right.is_empty() {
-                    if *left.start() <= *right.start() {
-                        pointer_range::uninit_copy_prefix_and_advance(&mut left, &mut output, 1);
-                    } else {
-                        pointer_range::uninit_copy_prefix_and_advance(&mut right, &mut output, 1);
-                    }
-                }
-
-                // Copy the rest of the remaining run into the buffer
-                if !left.is_empty() {
-                    let count = left.len();
-                    pointer_range::uninit_copy_prefix_and_advance(&mut left, &mut output, count);
-                }
-                if !right.is_empty() {
-                    let count = right.len();
-                    pointer_range::uninit_copy_prefix_and_advance(&mut right, &mut output, count);
-                }
-            }
-        }
-
-        // SAFETY: Since buffer now contains a permutation of slice, we can safely copy it over to
-        // slice, again regarding the same layout invariant for T and MaybeUninit<T>. (see above)
-        unsafe {
+            // See the safety comment, since buffer is a permutation we can assume init and copy
+            // back
             std::ptr::copy_nonoverlapping(
                 buffer.as_ptr() as *const T,
                 slice.as_mut_ptr(),
@@ -356,7 +297,6 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             let max_offset = slice.len() - hint;
             while offset < max_offset && cmp(key, &slice[hint + offset]) {
                 last_offset = offset;
-                // TODO: is this correct wrg. to overflow
                 offset = (offset << 1) + 1;
             }
             offset = std::cmp::min(offset, max_offset);
@@ -369,7 +309,6 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             let max_offset = hint + 1;
             while offset < max_offset && cmp_negated(key, &slice[hint - offset]) {
                 last_offset = offset;
-                // TODO: is this correct wrg. to overflow
                 offset = (offset << 1) + 1;
             }
             offset = std::cmp::min(offset, max_offset);
@@ -389,6 +328,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
         result
     }
 
+    // FIXME: better doc
     /// Sort the given `slice` assuming `slice[..split_point]` and `slice[split_point..]` are
     /// already sorted.
     fn merge_low<T: Ord>(
@@ -408,21 +348,18 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
 
         {
             // TODO: unchecked this?
-            let mut output: pointer_range::PointerRange<_> = (&mut buffer[..slice.len()]).into();
-            let (left, right) = slice.split_at_mut(split_point);
-            let mut left: pointer_range::PointerRange<_> = left.into();
-            let mut right: pointer_range::PointerRange<_> = right.into();
+            let mut output = &mut *buffer;
+            let (mut left, mut right) = slice.split_at_mut(split_point);
 
             // TODO: safety comment
             // TODO: do I want to count lengths?
             // TODO: write wrapper struct for pointer range maybe?
             unsafe {
-                pointer_range::uninit_copy_prefix_and_advance(&mut right, &mut output, 1);
+                (right, output) = slice::copy_mut_prefix_to_uninit(right, output, 1);
 
                 // Right side only had one element, only need to copy the left side
                 if right.is_empty() {
-                    let count = left.len();
-                    pointer_range::uninit_copy_prefix_and_advance(&mut left, &mut output, count);
+                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, left.len());
 
                     // Copy back to slice
                     std::ptr::copy_nonoverlapping(
@@ -436,10 +373,10 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                 // Left side only has one element, copy the rest of the right side and then the one
                 // element from the left side
                 if split_point == 1 {
-                    let count = right.len();
-                    pointer_range::uninit_copy_prefix_and_advance(&mut right, &mut output, count);
-                    pointer_range::uninit_copy_prefix_and_advance(&mut left, &mut output, 1);
+                    (_, output) = slice::copy_mut_prefix_to_uninit(right, output, right.len());
+                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, 1);
 
+                    // TODO: move this
                     // Copy back to slice
                     std::ptr::copy_nonoverlapping(
                         buffer.as_ptr() as *const T,
@@ -457,13 +394,9 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                         assert!(left.len() > 1);
                         assert!(!right.is_empty());
 
-                        if *right.start() < *left.start() {
+                        if *right.first().unwrap() < *left.first().unwrap() {
                             // Advance the right side
-                            pointer_range::uninit_copy_prefix_and_advance(
-                                &mut right,
-                                &mut output,
-                                1,
-                            );
+                            (right, output) = slice::copy_mut_prefix_to_uninit(right, output, 1);
                             count2 += 1;
                             count1 = 0;
 
@@ -472,11 +405,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                             }
                         } else {
                             // Advance the left side
-                            pointer_range::uninit_copy_prefix_and_advance(
-                                &mut left,
-                                &mut output,
-                                1,
-                            );
+                            (left, output) = slice::copy_mut_prefix_to_uninit(left, output, 1);
                             count1 += 1;
                             count2 = 0;
 
@@ -490,47 +419,32 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                         assert!(left.len() > 1);
                         assert!(!right.is_empty());
 
-                        count1 = Self::gallop::<T, false>(
-                            &*right.start(),
-                            std::slice::from_raw_parts(left.start(), left.len()),
-                            0,
-                        );
+                        count1 = Self::gallop::<T, false>(right.first().unwrap(), left, 0);
                         if count1 != 0 {
-                            pointer_range::uninit_copy_prefix_and_advance(
-                                &mut left,
-                                &mut output,
-                                count1,
-                            );
+                            (left, output) = slice::copy_mut_prefix_to_uninit(left, output, count1);
 
                             if left.len() <= 1 {
                                 break 'outer;
                             }
                         }
 
-                        pointer_range::uninit_copy_prefix_and_advance(&mut right, &mut output, 1);
+                        (right, output) = slice::copy_mut_prefix_to_uninit(right, output, 1);
 
                         if right.is_empty() {
                             break 'outer;
                         }
 
-                        count2 = Self::gallop::<T, true>(
-                            &*left.start(),
-                            std::slice::from_raw_parts(right.start(), right.len()),
-                            0,
-                        );
+                        count2 = Self::gallop::<T, true>(left.first().unwrap(), right, 0);
                         if count2 != 0 {
-                            pointer_range::uninit_copy_prefix_and_advance(
-                                &mut right,
-                                &mut output,
-                                count2,
-                            );
+                            (right, output) =
+                                slice::copy_mut_prefix_to_uninit(right, output, count2);
 
                             if right.is_empty() {
                                 break 'outer;
                             }
                         }
 
-                        pointer_range::uninit_copy_prefix_and_advance(&mut left, &mut output, 1);
+                        (left, output) = slice::copy_mut_prefix_to_uninit(left, output, 1);
 
                         if left.len() == 1 {
                             break 'outer;
@@ -546,14 +460,12 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
 
                 if left.len() == 1 {
                     assert!(!right.is_empty());
-                    let count = right.len();
-                    pointer_range::uninit_copy_prefix_and_advance(&mut right, &mut output, count);
-                    pointer_range::uninit_copy_prefix_and_advance(&mut left, &mut output, 1);
+                    (_, output) = slice::copy_mut_prefix_to_uninit(right, output, right.len());
+                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, 1);
                 } else {
                     assert!(!left.is_empty());
                     assert!(right.is_empty());
-                    let count = left.len();
-                    pointer_range::uninit_copy_prefix_and_advance(&mut left, &mut output, count);
+                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, left.len());
                 }
             }
         }
