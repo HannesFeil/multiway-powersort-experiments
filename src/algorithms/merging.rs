@@ -123,12 +123,11 @@ pub trait MergingMethod {
 mod slice {
     /// Copies the first `count` elements from `src` to `dst` and returns the slices with the
     /// prefix stripped, e.g. `(&src[count..], &mut dst[count..])`
-    #[must_use]
-    pub(super) fn copy_prefix_to_uninit<'a, 'b, T>(
-        src: &'a [T],
-        dst: &'b mut [std::mem::MaybeUninit<T>],
+    pub(super) fn copy_prefix_to_uninit<T>(
+        src: &mut &[T],
+        dst: &mut &mut [std::mem::MaybeUninit<T>],
         count: usize,
-    ) -> (&'a [T], &'b mut [std::mem::MaybeUninit<T>]) {
+    ) {
         assert!(src.len() >= count && dst.len() >= count);
 
         // SAFETY: We checked that src and dst are long enough.
@@ -142,22 +141,73 @@ mod slice {
             std::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr() as *mut T, count);
         }
 
-        (&src[count..], &mut dst[count..])
+        // Adjust slice sizes
+        *src = src.split_off(count..).unwrap();
+        *dst = dst.split_off_mut(count..).unwrap();
     }
 
     /// Copies the first `count` elements from `src` to `dst` and returns the slices with the
     /// prefix stripped, e.g. `(&mut src[count..], &mut dst[count..])`
-    #[must_use]
-    pub(super) fn copy_mut_prefix_to_uninit<'a, 'b, T>(
-        src: &'a mut [T],
-        dst: &'b mut [std::mem::MaybeUninit<T>],
+    pub(super) fn copy_mut_prefix_to_uninit<T>(
+        src: &mut &mut [T],
+        dst: &mut &mut [std::mem::MaybeUninit<T>],
         count: usize,
-    ) -> (&'a mut [T], &'b mut [std::mem::MaybeUninit<T>]) {
+    ) {
         assert!(src.len() >= count && dst.len() >= count);
 
-        let _ = copy_prefix_to_uninit(src, dst, count);
+        let temp_src = &mut &(**src);
+        copy_prefix_to_uninit(temp_src, dst, count);
 
-        (&mut src[count..], &mut dst[count..])
+        // Adjust src size (dst has been adjusted by copy_prefix_to_uninit)
+        *src = src.split_off_mut(count..).unwrap();
+    }
+
+    /// Copies the last `count` elements from `src` to `dst` and returns the slices with the
+    /// prefix stripped, e.g. `(&src[count..], &mut dst[count..])`
+    pub(super) fn copy_suffix_to_uninit<T>(
+        src: &mut &[T],
+        dst: &mut &mut [std::mem::MaybeUninit<T>],
+        count: usize,
+    ) {
+        assert!(src.len() >= count && dst.len() >= count);
+        let src_offset = src.len() - count;
+        let dst_offset = dst.len() - count;
+
+        // SAFETY: We checked that src and dst are long enough.
+        // The writing is valid since MaybeUninit<T> has the same layout, size and ABI as as T and
+        // elements in [T] are guaranteed to be laid out sequentially in memory
+        // (see https://doc.rust-lang.org/reference/type-layout.html#slice-layout)).
+        //
+        // Additionally the owner of dst is responsible for not causing UB when reading non Copy
+        // elements.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                src.as_ptr().add(src_offset),
+                dst.as_mut_ptr().add(dst_offset) as *mut T,
+                count,
+            );
+        }
+
+        // Adjust slice sizes
+        *src = src.split_off(..src_offset).unwrap();
+        *dst = dst.split_off_mut(..dst_offset).unwrap();
+    }
+
+    /// Copies the last `count` elements from `src` to `dst` and returns the slices with the
+    /// suffix stripped, e.g. `(&mut src[count..], &mut dst[count..])`
+    pub(super) fn copy_mut_suffix_to_uninit<T>(
+        src: &mut &mut [T],
+        dst: &mut &mut [std::mem::MaybeUninit<T>],
+        count: usize,
+    ) {
+        assert!(src.len() >= count && dst.len() >= count);
+        let src_offset = src.len() - count;
+
+        let temp_src = &mut &(**src);
+        copy_suffix_to_uninit(temp_src, dst, count);
+
+        // Adjust src size (dst has been adjusted by copy_prefix_to_uninit)
+        *src = src.split_off_mut(..src_offset).unwrap();
     }
 }
 
@@ -190,24 +240,24 @@ impl MergingMethod for CopyBoth {
         // assume slice.len() elements in buffer are initialized and may be copied back into slice
         // without duplication.
         unsafe {
-            let mut output = &mut *buffer;
-            let (mut left, mut right) = slice.split_at(split_point);
+            let output = &mut &mut buffer[..slice.len()];
+            let (ref mut left, ref mut right) = slice.split_at(split_point);
 
             // Repeatedly copy the smaller element of both runs into the buffer
             while !left.is_empty() && !right.is_empty() {
                 if left.first().unwrap() <= right.first().unwrap() {
-                    (left, output) = slice::copy_prefix_to_uninit(left, output, 1);
+                    slice::copy_prefix_to_uninit(left, output, 1);
                 } else {
-                    (right, output) = slice::copy_prefix_to_uninit(right, output, 1);
+                    slice::copy_prefix_to_uninit(right, output, 1);
                 }
             }
 
             // Copy the rest of the remaining run into the buffer
             if !left.is_empty() {
-                (_, output) = slice::copy_prefix_to_uninit(left, output, left.len());
+                slice::copy_prefix_to_uninit(left, output, left.len());
             }
             if !right.is_empty() {
-                (_, _) = slice::copy_prefix_to_uninit(right, output, right.len());
+                slice::copy_prefix_to_uninit(right, output, right.len());
             }
 
             // NOTE: We copy after the merging as opposed to before, to prevent inconsistent
@@ -346,129 +396,112 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             "Split point has to be within slice bounds"
         );
 
-        {
+        // Wrapping in closure for early return (ugly?)
+        // FIXME: expand unsafe block
+        (|| {
             // TODO: unchecked this?
-            let mut output = &mut *buffer;
-            let (mut left, mut right) = slice.split_at_mut(split_point);
+            let output = &mut &mut buffer[..slice.len()];
+            let (ref mut left, ref mut right) = slice.split_at_mut(split_point);
 
-            // TODO: safety comment
-            // TODO: do I want to count lengths?
-            // TODO: write wrapper struct for pointer range maybe?
-            unsafe {
-                (right, output) = slice::copy_mut_prefix_to_uninit(right, output, 1);
+            slice::copy_mut_prefix_to_uninit(right, output, 1);
 
-                // Right side only had one element, only need to copy the left side
-                if right.is_empty() {
-                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, left.len());
+            // Right side only had one element, only need to copy the left side
+            if right.is_empty() {
+                slice::copy_mut_prefix_to_uninit(left, output, left.len());
 
-                    // Copy back to slice
-                    std::ptr::copy_nonoverlapping(
-                        buffer.as_ptr() as *const T,
-                        slice.as_mut_ptr(),
-                        slice.len(),
-                    );
-                    return;
-                }
+                return;
+            }
 
-                // Left side only has one element, copy the rest of the right side and then the one
-                // element from the left side
-                if split_point == 1 {
-                    (_, output) = slice::copy_mut_prefix_to_uninit(right, output, right.len());
-                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, 1);
+            // Left side only has one element, copy the rest of the right side and then the one
+            // element from the left side
+            if left.len() == 1 {
+                slice::copy_mut_prefix_to_uninit(right, output, right.len());
+                slice::copy_mut_prefix_to_uninit(left, output, 1);
 
-                    // TODO: move this
-                    // Copy back to slice
-                    std::ptr::copy_nonoverlapping(
-                        buffer.as_ptr() as *const T,
-                        slice.as_mut_ptr(),
-                        slice.len(),
-                    );
-                    return;
-                }
+                return;
+            }
 
-                'outer: loop {
-                    let mut count1 = 0;
-                    let mut count2 = 0;
+            'outer: loop {
+                let mut count1 = 0;
+                let mut count2 = 0;
 
-                    while (count1 | count2) < *min_gallop {
-                        assert!(left.len() > 1);
-                        assert!(!right.is_empty());
+                while (count1 | count2) < *min_gallop {
+                    assert!(left.len() > 1);
+                    assert!(!right.is_empty());
 
-                        if *right.first().unwrap() < *left.first().unwrap() {
-                            // Advance the right side
-                            (right, output) = slice::copy_mut_prefix_to_uninit(right, output, 1);
-                            count2 += 1;
-                            count1 = 0;
-
-                            if right.is_empty() {
-                                break 'outer;
-                            }
-                        } else {
-                            // Advance the left side
-                            (left, output) = slice::copy_mut_prefix_to_uninit(left, output, 1);
-                            count1 += 1;
-                            count2 = 0;
-
-                            if left.len() <= 1 {
-                                break 'outer;
-                            }
-                        }
-                    }
-
-                    while count1 >= MIN_GALLOP || count2 >= MIN_GALLOP {
-                        assert!(left.len() > 1);
-                        assert!(!right.is_empty());
-
-                        count1 = Self::gallop::<T, false>(right.first().unwrap(), left, 0);
-                        if count1 != 0 {
-                            (left, output) = slice::copy_mut_prefix_to_uninit(left, output, count1);
-
-                            if left.len() <= 1 {
-                                break 'outer;
-                            }
-                        }
-
-                        (right, output) = slice::copy_mut_prefix_to_uninit(right, output, 1);
+                    if *right.first().unwrap() < *left.first().unwrap() {
+                        // Advance the right side
+                        slice::copy_mut_prefix_to_uninit(right, output, 1);
+                        count2 += 1;
+                        count1 = 0;
 
                         if right.is_empty() {
                             break 'outer;
                         }
-
-                        count2 = Self::gallop::<T, true>(left.first().unwrap(), right, 0);
-                        if count2 != 0 {
-                            (right, output) =
-                                slice::copy_mut_prefix_to_uninit(right, output, count2);
-
-                            if right.is_empty() {
-                                break 'outer;
-                            }
-                        }
-
-                        (left, output) = slice::copy_mut_prefix_to_uninit(left, output, 1);
+                    } else {
+                        // Advance the left side
+                        slice::copy_mut_prefix_to_uninit(left, output, 1);
+                        count1 += 1;
+                        count2 = 0;
 
                         if left.len() == 1 {
                             break 'outer;
                         }
+                    }
+                }
 
-                        *min_gallop = min_gallop.saturating_sub(1);
+                while count1 >= MIN_GALLOP || count2 >= MIN_GALLOP {
+                    assert!(left.len() > 1);
+                    assert!(!right.is_empty());
+
+                    count1 = Self::gallop::<T, false>(right.first().unwrap(), left, 0);
+                    if count1 != 0 {
+                        slice::copy_mut_prefix_to_uninit(left, output, count1);
+
+                        if left.len() <= 1 {
+                            break 'outer;
+                        }
                     }
 
-                    *min_gallop += 2;
+                    slice::copy_mut_prefix_to_uninit(right, output, 1);
+
+                    if right.is_empty() {
+                        break 'outer;
+                    }
+
+                    count2 = Self::gallop::<T, true>(left.first().unwrap(), right, 0);
+                    if count2 != 0 {
+                        slice::copy_mut_prefix_to_uninit(right, output, count2);
+
+                        if right.is_empty() {
+                            break 'outer;
+                        }
+                    }
+
+                    slice::copy_mut_prefix_to_uninit(left, output, 1);
+
+                    if left.len() == 1 {
+                        break 'outer;
+                    }
+
+                    *min_gallop = min_gallop.saturating_sub(1);
                 }
 
-                *min_gallop = std::cmp::max(*min_gallop, 1);
-
-                if left.len() == 1 {
-                    assert!(!right.is_empty());
-                    (_, output) = slice::copy_mut_prefix_to_uninit(right, output, right.len());
-                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, 1);
-                } else {
-                    assert!(!left.is_empty());
-                    assert!(right.is_empty());
-                    (_, _) = slice::copy_mut_prefix_to_uninit(left, output, left.len());
-                }
+                *min_gallop += 2;
             }
-        }
+
+            *min_gallop = std::cmp::max(*min_gallop, 1);
+
+            if left.len() == 1 {
+                assert!(!right.is_empty());
+                slice::copy_mut_prefix_to_uninit(right, output, right.len());
+                slice::copy_mut_prefix_to_uninit(left, output, 1);
+            } else {
+                assert!(!left.is_empty());
+                assert!(right.is_empty());
+                slice::copy_mut_prefix_to_uninit(left, output, left.len());
+            }
+        })();
         // Copy back the merged elements from the buffer
         // TODO: safety comment
         unsafe {
@@ -486,7 +519,131 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
         buffer: &mut [std::mem::MaybeUninit<T>],
         min_gallop: &mut usize,
     ) {
-        Self::merge_low(slice, split_point, buffer, min_gallop);
+        assert!(
+            buffer.len() >= slice.len(),
+            "We need at least slice.len() buffer size"
+        );
+        assert!(
+            (0..slice.len()).contains(&split_point),
+            "Split point has to be within slice bounds"
+        );
+
+        (|| {
+            // TODO: unchecked this?
+            let output = &mut &mut buffer[..slice.len()];
+            let (ref mut left, ref mut right) = slice.split_at_mut(split_point);
+
+            slice::copy_mut_suffix_to_uninit(left, output, 1);
+
+            // Left side only had one element, only need to copy the left side
+            if left.is_empty() {
+                slice::copy_mut_suffix_to_uninit(right, output, right.len());
+
+                return;
+            }
+
+            // right side only has one element, copy the rest of the left side and then the one
+            // element from the right side
+            if right.len() == 1 {
+                slice::copy_mut_suffix_to_uninit(left, output, left.len());
+                slice::copy_mut_suffix_to_uninit(right, output, 1);
+
+                return;
+            }
+
+            'outer: loop {
+                let mut count1 = 0;
+                let mut count2 = 0;
+
+                while (count1 | count2) < *min_gallop {
+                    assert!(right.len() > 1);
+                    assert!(!left.is_empty());
+
+                    if *right.last().unwrap() < *left.last().unwrap() {
+                        // Advance the left side
+                        slice::copy_mut_suffix_to_uninit(left, output, 1);
+                        count1 += 1;
+                        count2 = 0;
+
+                        if left.is_empty() {
+                            break 'outer;
+                        }
+                    } else {
+                        // Advance the right side
+                        slice::copy_mut_suffix_to_uninit(right, output, 1);
+                        count1 = 0;
+                        count2 += 1;
+
+                        if right.len() == 1 {
+                            break 'outer;
+                        }
+                    }
+                }
+
+                while count1 >= MIN_GALLOP || count2 >= MIN_GALLOP {
+                    assert!(right.len() > 1);
+                    assert!(!left.is_empty());
+
+                    count1 = left.len()
+                        - Self::gallop::<T, false>(right.last().unwrap(), left, left.len() - 1);
+                    if count1 != 0 {
+                        slice::copy_mut_suffix_to_uninit(left, output, count1);
+
+                        if left.is_empty() {
+                            break 'outer;
+                        }
+                    }
+
+                    slice::copy_mut_suffix_to_uninit(right, output, 1);
+
+                    if right.len() == 1 {
+                        break 'outer;
+                    }
+
+                    count2 = right.len()
+                        - Self::gallop::<T, true>(left.last().unwrap(), right, right.len() - 1);
+                    if count2 != 0 {
+                        slice::copy_mut_suffix_to_uninit(right, output, count2);
+
+                        if right.len() <= 1 {
+                            break 'outer;
+                        }
+                    }
+
+                    slice::copy_mut_suffix_to_uninit(left, output, 1);
+
+                    if left.is_empty() {
+                        break 'outer;
+                    }
+
+                    *min_gallop = min_gallop.saturating_sub(1);
+                }
+
+                *min_gallop += 2;
+            }
+
+            *min_gallop = std::cmp::max(*min_gallop, 1);
+
+            if right.len() == 1 {
+                assert!(!left.is_empty());
+                slice::copy_mut_suffix_to_uninit(left, output, left.len());
+                slice::copy_mut_suffix_to_uninit(right, output, 1);
+            } else {
+                assert!(!right.is_empty());
+                assert!(left.is_empty());
+                slice::copy_mut_suffix_to_uninit(right, output, right.len());
+            }
+        })();
+
+        // Copy back the merged elements from the buffer
+        // TODO: safety comment
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                buffer.as_ptr() as *const T,
+                slice.as_mut_ptr(),
+                slice.len(),
+            );
+        }
     }
 }
 
