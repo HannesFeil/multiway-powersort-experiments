@@ -5,7 +5,7 @@ use crate::algorithms::merging::strictly_decreasing_prefix_index;
 use super::merging::BufGuard as _;
 
 /// The default insertion sort to use
-type DefaultInsertionSort = super::insertionsort::InsertionSort;
+pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
 /// The default [`super::merging::MergingMethod`] to use
 pub type DefaultMergingMethod = super::merging::Galloping;

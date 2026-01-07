@@ -1,10 +1,10 @@
 //! The quicksort implementation
 
 /// The default [`super::RandomFactory`] to use
-type DefaultRngFactory = super::DefaultRngFactory;
+pub type DefaultRngFactory = super::DefaultRngFactory;
 
 /// The default insertion sort to use
-type DefaultInsertionSort = super::insertionsort::InsertionSort;
+pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
 /// The default `INSERTION_THRESHOLD` to use
 pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
