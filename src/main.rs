@@ -174,6 +174,13 @@ mod input {
         };
     }
 
+    type TrotSort = timsort::TimSort<
+        timsort::DefaultInsertionSort,
+        merging::CopyBoth,
+        timsort::DefaultBufGuardFactory,
+        { timsort::DEFAULT_MIN_MERGE },
+    >;
+
     algorithms! {
         /// The algorithm used by the rust std library
         Std: StdSort,
@@ -193,6 +200,8 @@ mod input {
         TopDownMergesort: top_down_mergesort::TopDownMergesort,
         /// Timsort
         Timsort: timsort::TimSort,
+        /// Trotsort
+        Trotsort: TrotSort,
     }
 
     impl std::fmt::Display for Algorithm {
