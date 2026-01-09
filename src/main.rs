@@ -102,7 +102,7 @@ mod input {
         about,
         subcommand_value_name = "sort",
         subcommand_help_heading = "Sorts",
-        disable_help_subcommand = true,
+        disable_help_subcommand = true
     )]
     pub struct Args {
         /// The sorting algorithm to run
@@ -274,7 +274,10 @@ mod input {
                         $code
                     }
                 },
-                Algorithm::Mergesort { bottom_up, check_sorted } => with_match_const! {
+                Algorithm::Mergesort {
+                    bottom_up,
+                    check_sorted,
+                } => with_match_const! {
                     const CHECK_SORTED: bool = match (check_sorted) {
                         true => true,
                         false => false,
@@ -283,18 +286,18 @@ mod input {
                     {
                         with_match_type! {
                             type $t = match (bottom_up) {
-                                true => crate::algorithms::bottom_up_mergesort::BottomUpMergeSort::<
-                                    crate::algorithms::bottom_up_mergesort::DefaultInsertionSort,
-                                    crate::algorithms::bottom_up_mergesort::DefaultMergingMethod,
-                                    crate::algorithms::bottom_up_mergesort::DefaultBufGuardFactory,
-                                    { crate::algorithms::bottom_up_mergesort::DEFAULT_INSERTION_THRESHOLD },
+                                true => crate::algorithms::mergesort::BottomUpMergeSort::<
+                                    crate::algorithms::mergesort::DefaultInsertionSort,
+                                    crate::algorithms::mergesort::DefaultMergingMethod,
+                                    crate::algorithms::mergesort::DefaultBufGuardFactory,
+                                    { crate::algorithms::mergesort::DEFAULT_INSERTION_THRESHOLD },
                                     CHECK_SORTED,
                                 >,
-                                false => crate::algorithms::top_down_mergesort::TopDownMergeSort::<
-                                    crate::algorithms::top_down_mergesort::DefaultInsertionSort,
-                                    crate::algorithms::top_down_mergesort::DefaultMergingMethod,
-                                    crate::algorithms::top_down_mergesort::DefaultBufGuardFactory,
-                                    { crate::algorithms::top_down_mergesort::DEFAULT_INSERTION_THRESHOLD },
+                                false => crate::algorithms::mergesort::TopDownMergeSort::<
+                                    crate::algorithms::mergesort::DefaultInsertionSort,
+                                    crate::algorithms::mergesort::DefaultMergingMethod,
+                                    crate::algorithms::mergesort::DefaultBufGuardFactory,
+                                    { crate::algorithms::mergesort::DEFAULT_INSERTION_THRESHOLD },
                                     CHECK_SORTED,
                                 >,
                             }
