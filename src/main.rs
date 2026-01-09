@@ -1,5 +1,5 @@
 use clap::Parser as _;
-use rand::SeedableRng as _;
+use rand::SeedableRng;
 
 mod algorithms;
 mod data;
@@ -12,7 +12,7 @@ mod test;
 /// Program entry point
 fn main() {
     let input::Args {
-        algorithms: input::Algorithms(algorithms),
+        algorithm,
         runs,
         size,
         data,
@@ -20,45 +20,31 @@ fn main() {
     } = input::Args::parse();
 
     println!(
-        "Running measurements for the following algorithms:\n{algs}",
-        algs = algorithms
-            .iter()
-            .map(|a| format!("{a}: stable = {stable}", stable = a.is_stable()))
-            .collect::<Vec<_>>()
-            .join(",\n")
+        "Running measurements for the following algorithm:\n{algorithm:?} (stable: {stable})",
+        stable = algorithm.is_stable(),
     );
     println!("Runs: {runs}, Slice size: {size}, Data type: {data}");
 
     // Create rng
     // FIXME: this is probably bad, but i have to look into rng anyway
     let mut rng = match seed {
-        Some(partial_seed) => {
-            let mut seed = [0; 32];
-            seed[16..].copy_from_slice(&partial_seed.to_le_bytes());
-            rand::rngs::StdRng::from_seed(seed)
-        }
+        Some(partial_seed) => rand::rngs::StdRng::seed_from_u64(partial_seed),
         None => {
             println!("No seed provided, generating one using system rng");
             rand::rngs::StdRng::from_os_rng()
         }
     };
 
-    for algorithm in algorithms {
-        println!("Running experiment with sort: {algorithm}");
+    let (samples, stats) = match data {
+        input::DataType::UniformU64 => {
+            perform_experiment::<u64, data::UniformData<u64>>(algorithm, runs, size, &mut rng)
+        }
+        input::DataType::PermutationU64 => {
+            perform_experiment::<u64, data::PermutationData<u64>>(algorithm, runs, size, &mut rng)
+        }
+    };
 
-        let (samples, stats) = match data {
-            input::DataType::UniformU32 => {
-                perform_experiment::<u32, data::UniformData<u32>>(algorithm, runs, size, &mut rng)
-            }
-            input::DataType::PermutationU32 => {
-                perform_experiment::<u32, data::PermutationData<u32>>(
-                    algorithm, runs, size, &mut rng,
-                )
-            }
-        };
-
-        println!("Stats: {stats:?}");
-    }
+    println!("Stats: {stats:?}");
 }
 
 /// Perform a time sampling experiment on the given sorting algorithm
@@ -106,186 +92,263 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
 
 /// Command line input handling
 mod input {
-    use crate::algorithms::*;
-    use clap::ValueEnum as _;
+    use crate::algorithms::Sort;
 
     /// Command line arguments
     #[derive(clap::Parser)]
+    #[command(
+        author,
+        version,
+        about,
+        subcommand_value_name = "sort",
+        subcommand_help_heading = "Sorts",
+        disable_help_subcommand = true,
+    )]
     pub struct Args {
-        /// The sorting algorithms to run, seperated by colons for example: 'std,quicksort'
-        #[arg()]
-        pub algorithms: Algorithms,
+        /// The sorting algorithm to run
+        #[command(subcommand)]
+        pub algorithm: Algorithm,
         /// The number of runs to do
-        #[arg()]
+        #[arg(long, default_value_t = 1_000)]
         pub runs: usize,
         /// The size of the slices to sort
-        #[arg()]
+        #[arg(long, default_value_t = 1_000_000)]
         pub size: usize,
         /// The data type to use for sorting
-        #[arg()]
+        #[arg(long, default_value_t = DataType::PermutationU64)]
         pub data: DataType,
         /// Seed for the rng
         #[arg(long)]
-        pub seed: Option<u128>,
+        pub seed: Option<u64>,
     }
 
-    /// Define the sorting algorithms available to the user
-    macro_rules! algorithms {
+    #[derive(Debug, clap::Subcommand)]
+    pub enum Algorithm {
+        /// The default sort in [`std`]
+        Std {
+            /// Whether to use the unstable version
+            #[arg(short, long)]
+            unstable: bool,
+        },
+        /// Insertionsort
+        Insertionsort {
+            /// Whether to use the binary version
+            #[arg(short, long)]
+            binary: bool,
+        },
+        /// Quicksort
+        Quicksort {
+            /// Abort on already sorted slice
+            #[arg(short, long)]
+            check_sorted: bool,
+        },
+        /// Peeksort
+        Peeksort {
+            /// Whether to also peek for and reverse decreasing runs
+            #[arg(short, long)]
+            find_decreasing: bool,
+        },
+        /// Mergesort
+        Mergesort {
+            /// Whether to use bottom up merging instead of top down
+            #[arg(short, long)]
+            bottom_up: bool,
+            /// Abort on already sorted slice
+            #[arg(short, long)]
+            check_sorted: bool,
+        },
+        /// Timsort
+        Timsort {
+            /// Whether to use [`crate::algorithms::merging::CopyBoth`], turning this into Trotsort
+            #[arg(short, long)]
+            simple_merging: bool,
+        },
+    }
+
+    macro_rules! with_match_type {
         (
-            $(
+            type $t:ident = match ($value:expr) {
                 $(
-                    #[$attr:meta]
-                )*
-                $name:ident : $sort:ty
-            ),*
-            $(,)?
-        ) => {
-            /// The different sorting algorithms
-            #[derive(Debug, Clone, Copy, clap::ValueEnum, Hash, PartialEq, Eq)]
-            pub enum Algorithm {
-                $(
-                    $(
-                        #[$attr]
-                    )*
-                    $name,
-                )*
+                    $pattern:pat => $t_value:ty
+                ),*
+                $(,)?
             }
 
-            // Delegate each variant to the corresponding Sort type
-            impl Algorithm {
-                /// The sort function
-                pub fn sorter<T: Ord>(self) -> fn(&mut [T]) {
-                    match self {
-                        $(
-                            Self::$name => <$sort as crate::algorithms::Sort>::sort,
-                        )*
-                    }
-                }
+            $code:block
+        ) => {
+            match $value {
+                $(
+                    $pattern => {
+                        type $t = $t_value;
 
-                /// Return whether the sort is stable
-                pub fn is_stable(self) -> bool {
-                    match self {
-                        $(
-                            Self::$name => <$sort as crate::algorithms::Sort>::IS_STABLE,
-                        )*
+                        $code
                     }
-                }
+                ),*
             }
         };
     }
 
-    type TrotSort = timsort::TimSort<
-        timsort::DefaultInsertionSort,
-        merging::CopyBoth,
-        timsort::DefaultBufGuardFactory,
-        { timsort::DEFAULT_MIN_MERGE },
-    >;
-
-    algorithms! {
-        /// The algorithm used by the rust std library
-        Std: StdSort,
-        /// The unstable algorithm used by the rust std library
-        StdUnstable: StdSort<false>,
-        /// Insertion sort
-        Insertion: insertionsort::InsertionSort,
-        /// Binary Insertion sort
-        BinaryInsertion: insertionsort::InsertionSort<true>,
-        /// Quicksort
-        Quicksort: quicksort::QuickSort,
-        /// Peeksort
-        Peeksort: peeksort::PeekSort,
-        /// Bottom-up mergesort
-        BottomUpMergesort: bottom_up_mergesort::BottomUpMergesort,
-        /// Top-down mergesort
-        TopDownMergesort: top_down_mergesort::TopDownMergesort,
-        /// Timsort
-        Timsort: timsort::TimSort,
-        /// Trotsort
-        Trotsort: TrotSort,
-    }
-
-    impl std::fmt::Display for Algorithm {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str(self.to_possible_value().unwrap().get_name())
-        }
-    }
-
-    /// Set of sorting [`Algorithms`](crate::algorithms::Algorithm) to run
-    #[derive(Debug, Clone)]
-    pub struct Algorithms(pub std::collections::HashSet<Algorithm>);
-
-    impl clap::builder::ValueParserFactory for Algorithms {
-        type Parser = AlgorithmsParser;
-
-        fn value_parser() -> Self::Parser {
-            AlgorithmsParser(clap::builder::EnumValueParser::new())
-        }
-    }
-
-    /// [`Parser`](clap::builder::TypedValueParser) for [`Algorithms`]
-    #[derive(Clone)]
-    pub struct AlgorithmsParser(clap::builder::EnumValueParser<Algorithm>);
-
-    impl clap::builder::TypedValueParser for AlgorithmsParser {
-        type Value = Algorithms;
-
-        fn parse_ref(
-            &self,
-            cmd: &clap::Command,
-            arg: Option<&clap::Arg>,
-            value: &std::ffi::OsStr,
-        ) -> Result<Self::Value, clap::Error> {
-            let mut algorithms = std::collections::HashSet::new();
-
-            if value.is_empty() {
-                return self.0.parse_ref(cmd, arg, value).map(|_| unreachable!());
+    macro_rules! with_match_const {
+        (
+            const $t:ident: $t_type:ty = match ($value:expr) {
+                $(
+                    $pattern:pat => $t_value:expr
+                ),*
+                $(,)?
             }
 
-            for mut value in value.to_string_lossy().split(',') {
-                value = value.trim();
+            $code:block
+        ) => {
+            match $value {
+                $(
+                    $pattern => {
+                        const $t: $t_type = $t_value;
 
-                if value == "*" {
-                    self.0
-                        .possible_values()
-                        .unwrap()
-                        .try_for_each(|possible_value| {
-                            self.0
-                                .parse_ref(cmd, arg, possible_value.get_name().as_ref())
-                                .map(|algorithm| {
-                                    algorithms.insert(algorithm);
-                                })
-                        })?;
-                } else {
-                    algorithms.insert(self.0.parse_ref(cmd, arg, value.as_ref())?);
-                }
+                        $code
+                    }
+                ),*
             }
+        };
+    }
 
-            Ok(Algorithms(algorithms))
+    macro_rules! with_type {
+        ($alg:expr => $t:ident, $code:block) => {
+            match $alg {
+                Algorithm::Std { unstable } => with_match_const! {
+                    const STABLE: bool = match (unstable) {
+                        true => false,
+                        false => true,
+                    }
+
+                    {
+                        type $t = crate::algorithms::StdSort::<STABLE>;
+
+                        $code
+                    }
+                },
+                Algorithm::Insertionsort { binary } => with_match_const! {
+                    const BINARY: bool = match (binary) {
+                        true => true,
+                        false => false,
+                    }
+
+                    {
+                        type $t = crate::algorithms::insertionsort::InsertionSort::<BINARY>;
+
+                        $code
+                    }
+                },
+                Algorithm::Quicksort { check_sorted } => with_match_const! {
+                    const CHECK_SORTED: bool = match (check_sorted) {
+                        true => true,
+                        false => false,
+                    }
+
+                    {
+                        type $t = crate::algorithms::quicksort::QuickSort::<
+                            crate::algorithms::quicksort::DefaultRngFactory,
+                            crate::algorithms::quicksort::DefaultInsertionSort,
+                            { crate::algorithms::quicksort::DEFAULT_INSERTION_THRESHOLD },
+                            { crate::algorithms::quicksort::DEFAULT_NINTHER_THRESHOLD },
+                            CHECK_SORTED,
+                        >;
+
+                        $code
+                    }
+                },
+                Algorithm::Peeksort { find_decreasing } => with_match_const! {
+                    const ONLY_INCREASING: bool = match (find_decreasing) {
+                        true => true,
+                        false => false,
+                    }
+
+                    {
+                        type $t = crate::algorithms::peeksort::PeekSort::<
+                            crate::algorithms::peeksort::DefaultInsertionSort,
+                            crate::algorithms::peeksort::DefaultMergingMethod,
+                            crate::algorithms::peeksort::DefaultBufGuardFactory,
+                            { crate::algorithms::peeksort::DEFAULT_INSERTION_THRESHOLD },
+                            ONLY_INCREASING,
+                        >;
+
+                        $code
+                    }
+                },
+                Algorithm::Mergesort { bottom_up, check_sorted } => with_match_const! {
+                    const CHECK_SORTED: bool = match (check_sorted) {
+                        true => true,
+                        false => false,
+                    }
+
+                    {
+                        with_match_type! {
+                            type $t = match (bottom_up) {
+                                true => crate::algorithms::bottom_up_mergesort::BottomUpMergeSort::<
+                                    crate::algorithms::bottom_up_mergesort::DefaultInsertionSort,
+                                    crate::algorithms::bottom_up_mergesort::DefaultMergingMethod,
+                                    crate::algorithms::bottom_up_mergesort::DefaultBufGuardFactory,
+                                    { crate::algorithms::bottom_up_mergesort::DEFAULT_INSERTION_THRESHOLD },
+                                    CHECK_SORTED,
+                                >,
+                                false => crate::algorithms::top_down_mergesort::TopDownMergeSort::<
+                                    crate::algorithms::top_down_mergesort::DefaultInsertionSort,
+                                    crate::algorithms::top_down_mergesort::DefaultMergingMethod,
+                                    crate::algorithms::top_down_mergesort::DefaultBufGuardFactory,
+                                    { crate::algorithms::top_down_mergesort::DEFAULT_INSERTION_THRESHOLD },
+                                    CHECK_SORTED,
+                                >,
+                            }
+
+                            $code
+                        }
+                    }
+                },
+                Algorithm::Timsort { simple_merging } => with_match_type! {
+                    type $t = match (simple_merging) {
+                        false => crate::algorithms::timsort::TimSort<
+                            crate::algorithms::timsort::DefaultInsertionSort,
+                            crate::algorithms::timsort::DefaultMergingMethod,
+                            crate::algorithms::timsort::DefaultBufGuardFactory,
+                            { crate::algorithms::timsort::DEFAULT_MIN_MERGE },
+                        >,
+                        true => crate::algorithms::timsort::TimSort<
+                            crate::algorithms::timsort::DefaultInsertionSort,
+                            crate::algorithms::merging::CopyBoth,
+                            crate::algorithms::timsort::DefaultBufGuardFactory,
+                            { crate::algorithms::timsort::DEFAULT_MIN_MERGE },
+                        >,
+                    }
+
+                    $code
+                },
+            }
+        };
+    }
+
+    impl Algorithm {
+        /// Returns if this is a stable sort
+        pub fn is_stable(&self) -> bool {
+            with_type! { self => S, { S::IS_STABLE } }
         }
 
-        fn possible_values(
-            &self,
-        ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
-            Some(Box::new(self.0.possible_values().unwrap().chain(
-                std::iter::once(
-                    clap::builder::PossibleValue::new("*").help("All sorting algorithms"),
-                ),
-            )))
+        /// Returns the sorting function
+        pub fn sorter<T: Ord>(&self) -> fn(&mut [T]) {
+            with_type! { self => S, { S::sort } }
         }
     }
 
     /// Available data types for sorting
     #[derive(Clone, Copy, clap::ValueEnum)]
     pub enum DataType {
-        UniformU32,
-        PermutationU32,
+        UniformU64,
+        PermutationU64,
     }
 
     impl std::fmt::Display for DataType {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.write_str(match self {
-                DataType::UniformU32 => "Uniform u32",
-                DataType::PermutationU32 => "Permutation u32",
+                DataType::UniformU64 => "uniform-u64",
+                DataType::PermutationU64 => "permutation-u64",
             })
         }
     }
