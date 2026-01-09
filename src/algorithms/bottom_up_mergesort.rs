@@ -18,7 +18,7 @@ pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
 pub const DEFAULT_CHECK_SORTED: bool = true;
 
 /// The Bottom-Up Mergesort [`super::Sort`]
-pub struct BottomUpMergesort<
+pub struct BottomUpMergeSort<
     I: super::Sort = DefaultInsertionSort,
     M: super::merging::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
@@ -36,7 +36,7 @@ impl<
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
-> super::Sort for BottomUpMergesort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
+> super::Sort for BottomUpMergeSort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
 {
     const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
 
@@ -59,7 +59,7 @@ impl<
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
-> BottomUpMergesort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
+> BottomUpMergeSort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
 {
     /// The actual bottom-up mergesort implementation, sorts `slice`
     fn bottom_up_mergesort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
@@ -95,7 +95,7 @@ mod tests {
     const TEST_SIZE: usize = 100_000;
 
     /// Default peeksort but allowing decreasing runs
-    type BottomUpMergesortUnchecked = BottomUpMergesort<
+    type BottomUpMergesortUnchecked = BottomUpMergeSort<
         DefaultInsertionSort,
         DefaultMergingMethod,
         DefaultBufGuardFactory,
@@ -105,19 +105,19 @@ mod tests {
 
     #[test]
     fn empty() {
-        crate::test::test_empty::<BottomUpMergesort>();
+        crate::test::test_empty::<BottomUpMergeSort>();
         crate::test::test_empty::<BottomUpMergesortUnchecked>();
     }
 
     #[test]
     fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergesort>();
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergeSort>();
         crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergesortUnchecked>();
     }
 
     #[test]
     fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergesort>();
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergeSort>();
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergesortUnchecked>();
     }
 }
