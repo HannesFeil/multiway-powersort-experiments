@@ -159,18 +159,30 @@ mod tests {
     const RUNS: usize = 100;
     const TEST_SIZE: usize = 100_000;
 
+    type PowerSortOnlyIncreasing = PowerSort<
+        DefaultInsertionSort,
+        DefaultMergingMethod,
+        DefaultBufGuardFactory,
+        DEFAULT_MIN_RUN_LENGTH,
+        true,
+        DEFAULT_USE_POWER_INDEXED_STACK,
+    >;
+
     #[test]
     fn empty() {
         crate::test::test_empty::<PowerSort>();
+        crate::test::test_empty::<PowerSortOnlyIncreasing>();
     }
 
     #[test]
     fn random() {
         crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSort>();
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortOnlyIncreasing>();
     }
 
     #[test]
     fn random_stable() {
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSort>();
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortOnlyIncreasing>();
     }
 }
