@@ -27,7 +27,7 @@ fn find_first_sequentially<T>(
 }
 
 /// Returns the largest `index`, such that `slice[..index]` is weakly increasing
-pub fn weakly_increasing_prefix_index<T: Ord>(slice: &mut [T]) -> usize {
+pub fn weakly_increasing_prefix_index<T: Ord>(slice: &[T]) -> usize {
     let iter = slice.iter().enumerate();
 
     // Find the index of the first element breaking the sequence
@@ -42,7 +42,7 @@ pub fn weakly_increasing_prefix_index<T: Ord>(slice: &mut [T]) -> usize {
 }
 
 /// Returns the smallest `index`, such that `slice[index..]` is weakly increasing
-pub fn weakly_increasing_suffix_index<T: Ord>(slice: &mut [T]) -> usize {
+pub fn weakly_increasing_suffix_index<T: Ord>(slice: &[T]) -> usize {
     let iter = slice.iter().enumerate().rev();
 
     // Find the index of the first element breaking the sequence
@@ -57,7 +57,7 @@ pub fn weakly_increasing_suffix_index<T: Ord>(slice: &mut [T]) -> usize {
 }
 
 /// Returns the largest `index`, such that `slice[..index]` is strictly decreasing
-pub fn strictly_decreasing_prefix_index<T: Ord>(slice: &mut [T]) -> usize {
+pub fn strictly_decreasing_prefix_index<T: Ord>(slice: &[T]) -> usize {
     let iter = slice.iter().enumerate();
 
     // Find the index of the first element breaking the sequence
@@ -72,7 +72,7 @@ pub fn strictly_decreasing_prefix_index<T: Ord>(slice: &mut [T]) -> usize {
 }
 
 /// Returns the smallest `index`, such that `slice[index..]` is strictly decreasing
-pub fn strictly_decreasing_suffix_index<T: Ord>(slice: &mut [T]) -> usize {
+pub fn strictly_decreasing_suffix_index<T: Ord>(slice: &[T]) -> usize {
     let iter = slice.iter().enumerate().rev();
 
     // Find the index of the first element breaking the sequence
@@ -83,6 +83,22 @@ pub fn strictly_decreasing_suffix_index<T: Ord>(slice: &mut [T]) -> usize {
         Ok(None) => slice.len(),
         // Slice is empty, split into two empty slices
         Err(()) => 0,
+    }
+}
+
+/// Returns the largest (`index`, `decreasing`), such that `slice[index..]` is weakly increasing or
+/// strictly decreasing. `decreasing` indicating if the found sequence is strictly decreasing.
+pub fn weakly_increasing_or_strictly_decreasing_index<T: Ord>(slice: &mut [T]) -> (usize, bool) {
+    if slice.len() < 2 {
+        return (slice.len(), false);
+    }
+
+    let (first, rest) = slice.split_first().unwrap();
+
+    if first > rest.first().unwrap() {
+        (strictly_decreasing_prefix_index(rest) + 1, true)
+    } else {
+        (weakly_increasing_prefix_index(rest) + 1, false)
     }
 }
 
