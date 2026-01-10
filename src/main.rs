@@ -179,8 +179,12 @@ mod input {
         },
         /// Powersort
         Powersort {
+            /// Which node power calculation method to use
             #[arg(short, long, default_value_t = PowersortNodePowerMethod::MostSignificantSetBit)]
             node_power_method: PowersortNodePowerMethod,
+            /// Whether to use a power indexed stack
+            #[arg(short, long)]
+            power_indexed_stack: bool,
         },
     }
 
@@ -343,7 +347,7 @@ mod input {
 
                     $code
                 },
-                Algorithm::Powersort { node_power_method } => {
+                Algorithm::Powersort { node_power_method, power_indexed_stack } => {
                     with_match_type! {
                         type M = match (node_power_method) {
                             PowersortNodePowerMethod::Trivial => crate::algorithms::powersort::node_power::Trivial,
@@ -353,17 +357,26 @@ mod input {
                         }
 
                         {
-                            type $t = crate::algorithms::powersort::PowerSort<
-                                M,
-                                crate::algorithms::powersort::DefaultInsertionSort,
-                                crate::algorithms::powersort::DefaultMergingMethod,
-                                crate::algorithms::powersort::DefaultBufGuardFactory,
-                                { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
-                                { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
-                                { crate::algorithms::powersort::DEFAULT_USE_POWER_INDEXED_STACK },
-                            >;
+                            with_match_const! {
+                                const USE_POWER_INDEXED_STACK: bool = match (power_indexed_stack) {
+                                    true => true,
+                                    false => false,
+                                }
 
-                            $code
+                                {
+                                    type $t = crate::algorithms::powersort::PowerSort<
+                                        M,
+                                        crate::algorithms::powersort::DefaultInsertionSort,
+                                        crate::algorithms::powersort::DefaultMergingMethod,
+                                        crate::algorithms::powersort::DefaultBufGuardFactory,
+                                        { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
+                                        { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
+                                        USE_POWER_INDEXED_STACK,
+                                    >;
+
+                                    $code
+                                }
+                            }
                         }
                     }
                 }
