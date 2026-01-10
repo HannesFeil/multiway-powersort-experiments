@@ -36,11 +36,11 @@ fn main() {
     };
 
     let (samples, stats) = match data {
-        input::DataType::UniformU64 => {
-            perform_experiment::<u64, data::UniformData<u64>>(algorithm, runs, size, &mut rng)
+        input::DataType::UniformU32 => {
+            perform_experiment::<u32, data::UniformData<u32>>(algorithm, runs, size, &mut rng)
         }
-        input::DataType::PermutationU64 => {
-            perform_experiment::<u64, data::PermutationData<u64>>(algorithm, runs, size, &mut rng)
+        input::DataType::PermutationU32 => {
+            perform_experiment::<u32, data::PermutationData<u32>>(algorithm, runs, size, &mut rng)
         }
     };
 
@@ -115,11 +115,25 @@ mod input {
         #[arg(long, default_value_t = 1_000_000)]
         pub size: usize,
         /// The data type to use for sorting
-        #[arg(long, default_value_t = DataType::PermutationU64)]
+        #[arg(long, default_value_t = DataType::PermutationU32)]
         pub data: DataType,
         /// Seed for the rng
         #[arg(long)]
         pub seed: Option<u64>,
+    }
+
+    #[derive(Debug, Clone, Copy, clap::ValueEnum)]
+    pub enum PowersortNodePowerMethod {
+        Trivial,
+        DivisionLoop,
+        BitwiseLoop,
+        MostSignificantSetBit,
+    }
+
+    impl std::fmt::Display for PowersortNodePowerMethod {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(clap::ValueEnum::to_possible_value(self).unwrap().get_name())
+        }
     }
 
     #[derive(Debug, clap::Subcommand)]
@@ -164,7 +178,10 @@ mod input {
             simple_merging: bool,
         },
         /// Powersort
-        Powersort {},
+        Powersort {
+            #[arg(short, long, default_value_t = PowersortNodePowerMethod::MostSignificantSetBit)]
+            node_power_method: PowersortNodePowerMethod,
+        },
     }
 
     macro_rules! with_match_type {
@@ -326,10 +343,29 @@ mod input {
 
                     $code
                 },
-                Algorithm::Powersort {} => {
-                    type $t = crate::algorithms::powersort::PowerSort;
+                Algorithm::Powersort { node_power_method } => {
+                    with_match_type! {
+                        type M = match (node_power_method) {
+                            PowersortNodePowerMethod::Trivial => crate::algorithms::powersort::node_power::Trivial,
+                            PowersortNodePowerMethod::DivisionLoop => crate::algorithms::powersort::node_power::DivisionLoop,
+                            PowersortNodePowerMethod::BitwiseLoop => crate::algorithms::powersort::node_power::BitwiseLoop,
+                            PowersortNodePowerMethod::MostSignificantSetBit => crate::algorithms::powersort::node_power::MostSignificantSetBit,
+                        }
 
-                    $code
+                        {
+                            type $t = crate::algorithms::powersort::PowerSort<
+                                M,
+                                crate::algorithms::powersort::DefaultInsertionSort,
+                                crate::algorithms::powersort::DefaultMergingMethod,
+                                crate::algorithms::powersort::DefaultBufGuardFactory,
+                                { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
+                                { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
+                                { crate::algorithms::powersort::DEFAULT_USE_POWER_INDEXED_STACK },
+                            >;
+
+                            $code
+                        }
+                    }
                 }
             }
         };
@@ -350,16 +386,13 @@ mod input {
     /// Available data types for sorting
     #[derive(Clone, Copy, clap::ValueEnum)]
     pub enum DataType {
-        UniformU64,
-        PermutationU64,
+        UniformU32,
+        PermutationU32,
     }
 
     impl std::fmt::Display for DataType {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str(match self {
-                DataType::UniformU64 => "uniform-u64",
-                DataType::PermutationU64 => "permutation-u64",
-            })
+            f.write_str(clap::ValueEnum::to_possible_value(self).unwrap().get_name())
         }
     }
 }
