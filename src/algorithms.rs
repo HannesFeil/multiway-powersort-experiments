@@ -1,9 +1,10 @@
 //! Contains various sorting algorithms see e.g. [`Sort`] and [`Algorithm`].
 
-pub mod mergesort;
 pub mod insertionsort;
+pub mod mergesort;
 pub mod merging;
 pub mod peeksort;
+pub mod powersort;
 pub mod quicksort;
 pub mod timsort;
 

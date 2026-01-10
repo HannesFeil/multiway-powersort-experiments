@@ -167,6 +167,13 @@ pub fn test_random_sorted<const RUNS: usize, const TEST_SIZE: usize, S: crate::a
         S::sort(&mut values);
         assert!(values.is_sorted(), "Run {run} was not sorted");
     }
+
+    let mut values: Box<[usize]> = std::iter::repeat_n(0..TEST_SIZE / 4, 4).flatten().collect();
+    for run in 0..RUNS {
+        values.shuffle(&mut rng);
+        S::sort(&mut values);
+        assert!(values.is_sorted(), "Run {run} was not sorted");
+    }
 }
 
 /// Like [`test_random_sorted`] but additionally checks that the sort was stable
@@ -175,6 +182,8 @@ pub fn test_random_stable_sorted<
     const TEST_SIZE: usize,
     S: crate::algorithms::Sort,
 >() {
+    assert!(S::IS_STABLE);
+
     let mut rng = test_rng();
     let mut values: Box<[usize]> = std::iter::repeat_n(0..TEST_SIZE / 4, 4).flatten().collect();
     let mut ordered_values: Box<[IndexedOrdered<usize>]>;

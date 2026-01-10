@@ -163,6 +163,8 @@ mod input {
             #[arg(short, long)]
             simple_merging: bool,
         },
+        /// Powersort
+        Powersort {},
     }
 
     macro_rules! with_match_type {
@@ -324,6 +326,11 @@ mod input {
 
                     $code
                 },
+                Algorithm::Powersort {} => {
+                    type $t = crate::algorithms::powersort::PowerSort;
+
+                    $code
+                }
             }
         };
     }
