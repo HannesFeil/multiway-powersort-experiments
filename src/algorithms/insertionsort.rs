@@ -17,9 +17,9 @@ impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
         }
 
         if BINARY {
-            Self::insertion_sort_with_partition(slice, split_point);
-        } else {
             Self::binary_insertion_sort_with_partition(slice, split_point);
+        } else {
+            Self::insertion_sort_with_partition(slice, split_point);
         }
     }
 }
