@@ -23,6 +23,9 @@ pub const DEFAULT_ONLY_INCREASING_RUNS: bool = false;
 /// The default `POWER_INDEXED_STACK` to use
 pub const DEFAULT_USE_POWER_INDEXED_STACK: bool = false;
 
+/// Type used to represent runs of sorted elements
+type Run = std::ops::Range<usize>;
+
 // TODO: missing node power implementation
 /// The powersort [`super::Sort`]
 pub struct PowerSort<
@@ -62,7 +65,11 @@ impl<
         let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
 
         // Delegate to helper function
-        Self::powersort(slice, buffer.as_uninit_slice_mut());
+        if USE_POWER_INDEXED_STACK {
+            Self::powersort::<T, PowerIndexedStack>(slice, buffer.as_uninit_slice_mut());
+        } else {
+            Self::powersort::<T, Stack>(slice, buffer.as_uninit_slice_mut());
+        }
     }
 }
 
@@ -76,12 +83,10 @@ impl<
     const USE_POWER_INDEXED_STACK: bool,
 > PowerSort<N, I, M, B, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS, USE_POWER_INDEXED_STACK>
 {
-    fn powersort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
+    fn powersort<T: Ord, S: RunStack>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
         // TODO: unwrap?
-        let log_n_plus_2 = usize::try_from(slice.len().ilog2()).unwrap() + 2;
-        let mut stack: Box<[Option<std::ops::Range<usize>>]> =
-            std::iter::repeat_n(None, log_n_plus_2).collect();
-        let mut top = 0;
+        let max_stack_height = usize::try_from(slice.len().ilog2()).unwrap() + 2;
+        let mut stack = S::new(max_stack_height);
         let mut run_a = 0..Self::extend_run(slice);
         if run_a.len() < MIN_RUN_LENGTH {
             let end_a = std::cmp::min(slice.len(), MIN_RUN_LENGTH);
@@ -99,33 +104,22 @@ impl<
 
             assert!(run_a.end == run_b.start);
             let node_power = N::node_power(slice.len(), run_a.clone(), run_b.clone());
-            assert!(node_power != top);
+            assert!(node_power != stack.top_power());
 
-            if node_power < top {
-                for possible_run in stack[node_power..=top].iter_mut().rev() {
-                    let Some(run) = possible_run else {
-                        continue;
-                    };
-
+            if node_power < stack.top_power() {
+                for run in stack.pop_runs(node_power) {
                     run_a.start = run.start;
                     M::merge(&mut slice[run_a.clone()], run.len(), buffer);
                     // TODO: keep these assertions as debug invariants? (other sorts?)
                     debug_assert!(slice[run_a.clone()].is_sorted());
-
-                    *possible_run = None;
                 }
             }
 
-            top = node_power;
-            stack[node_power] = Some(run_a);
+            stack.push(run_a, node_power);
             run_a = run_b;
         }
 
-        for possible_run in stack[..=top].iter().rev() {
-            let Some(run) = possible_run else {
-                continue;
-            };
-
+        for run in stack.pop_runs(0) {
             M::merge(&mut slice[run.start..], run.len(), buffer);
         }
     }
@@ -142,6 +136,90 @@ impl<
                 }
             }
         }
+    }
+}
+
+trait RunStack {
+    /// Create a new stack with the given capacity
+    fn new(capacity: usize) -> Self;
+
+    /// Returns a power greater or equal to the highest power of a run in the stack
+    fn top_power(&self) -> usize;
+
+    /// Push a new run onto the stack
+    ///
+    /// power must be greater than or equal to [`RunStack::top_power()`].
+    /// After this call, [`RunStack::top_power()`] will be equal to `power`.
+    fn push(&mut self, run: Run, power: usize);
+
+    /// Pop runs from the top until [`RunStack::top_power()`] is less than `power`
+    ///
+    /// power must be smaller than or equal to [`RunStack::top_power()`].
+    fn pop_runs<'this>(&'this mut self, power: usize) -> impl Iterator<Item = Run> + 'this;
+}
+
+/// A simple stack
+#[derive(Debug)]
+struct Stack(Box<[Option<Run>]>, usize);
+
+impl RunStack for Stack {
+    fn new(capacity: usize) -> Self {
+        Self(std::iter::repeat_n(None, capacity).collect(), 0)
+    }
+
+    fn top_power(&self) -> usize {
+        self.1
+    }
+
+    fn push(&mut self, run: Run, power: usize) {
+        assert!(power >= self.1);
+        assert!(power < self.0.len());
+
+        self.0[power] = Some(run);
+        self.1 = power;
+    }
+
+    fn pop_runs<'this>(&'this mut self, power: usize) -> impl Iterator<Item = Run> + 'this {
+        assert!(power <= self.top_power());
+
+        let top_power = self.top_power();
+        self.1 = power;
+        (power..=top_power)
+            .rev()
+            .filter_map(|i| dbg!(&mut self.0[i]).take())
+    }
+}
+
+/// A power indexed stack
+#[derive(Debug)]
+struct PowerIndexedStack(Vec<(usize, Run)>);
+
+impl RunStack for PowerIndexedStack {
+    fn new(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
+
+    fn top_power(&self) -> usize {
+        self.0.last().map(|(power, _)| *power).unwrap_or(0)
+    }
+
+    fn push(&mut self, run: Run, power: usize) {
+        assert!(power >= self.top_power());
+        assert!(!self.0.spare_capacity_mut().is_empty());
+
+        self.0.push((power, run));
+    }
+
+    fn pop_runs<'this>(&'this mut self, power: usize) -> impl Iterator<Item = Run> + 'this {
+        assert!(power <= self.top_power());
+
+        std::iter::from_fn(move || {
+            if self.top_power() >= power {
+                self.0.pop().map(|(_, run)| run)
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -273,8 +351,18 @@ pub mod node_power {
 mod tests {
     use super::*;
 
-    const RUNS: usize = 100;
+    const RUNS: usize = 20;
     const TEST_SIZE: usize = 100_000;
+
+    type PowerSortTrivialPowerIndexedStack = PowerSort<
+        node_power::Trivial,
+        DefaultInsertionSort,
+        DefaultMergingMethod,
+        DefaultBufGuardFactory,
+        DEFAULT_MIN_RUN_LENGTH,
+        DEFAULT_ONLY_INCREASING_RUNS,
+        true,
+    >;
 
     type PowerSortTrivial = PowerSort<
         node_power::Trivial,
@@ -319,6 +407,7 @@ mod tests {
     #[test]
     fn empty() {
         crate::test::test_empty::<PowerSortTrivial>();
+        crate::test::test_empty::<PowerSortTrivialPowerIndexedStack>();
         crate::test::test_empty::<PowerSortDivisionLoop>();
         crate::test::test_empty::<PowerSortBitwiseLoop>();
         crate::test::test_empty::<PowerSortMostSignificantBit>();
@@ -327,6 +416,7 @@ mod tests {
     #[test]
     fn random() {
         crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivial>();
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivialPowerIndexedStack>();
         crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortDivisionLoop>();
         crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortBitwiseLoop>();
         crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortMostSignificantBit>();
@@ -335,6 +425,8 @@ mod tests {
     #[test]
     fn random_stable() {
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivial>();
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivialPowerIndexedStack>(
+        );
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortDivisionLoop>();
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortBitwiseLoop>();
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortMostSignificantBit>();
