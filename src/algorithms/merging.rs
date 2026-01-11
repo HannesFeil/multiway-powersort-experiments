@@ -125,9 +125,9 @@ pub trait MergingMethod {
     /// Whether the merging method is stable
     const IS_STABLE: bool;
 
-    /// Merge the two sorted runs `0..split_point` and `split_point..slice.len()`, potentially
+    /// Merge the two sorted runs `0..run_length` and `run_length..slice.len()`, potentially
     /// using `buffer`.
-    fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]);
+    fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]);
 
     /// The required capacity of the buffer, needed for merging slices with length less than
     /// or equal to `size`.
@@ -237,7 +237,7 @@ pub struct CopyBoth;
 impl MergingMethod for CopyBoth {
     const IS_STABLE: bool = true;
 
-    fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
+    fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
         if slice.is_empty() {
             return;
         }
@@ -247,7 +247,7 @@ impl MergingMethod for CopyBoth {
             "Buffer needs to have at least the size of slice"
         );
         assert!(
-            (0..slice.len()).contains(&split_point),
+            (0..slice.len()).contains(&run_length),
             "Split points needs to be in bounds"
         );
 
@@ -257,7 +257,7 @@ impl MergingMethod for CopyBoth {
         // without duplication.
         unsafe {
             let output = &mut &mut buffer[..slice.len()];
-            let (ref mut left, ref mut right) = slice.split_at(split_point);
+            let (ref mut left, ref mut right) = slice.split_at(run_length);
 
             // Repeatedly copy the smaller element of both runs into the buffer
             while !left.is_empty() && !right.is_empty() {
@@ -301,38 +301,38 @@ pub struct Galloping<const MIN_GALLOP: usize = 7>;
 impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
     const IS_STABLE: bool = true; // TODO: check this
 
-    fn merge<T: Ord>(slice: &mut [T], split_point: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
-        if slice.len() < 2 || split_point == 0 {
+    fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
+        if slice.len() < 2 || run_length == 0 {
             return;
         }
 
-        let start = Self::gallop::<T, false>(&slice[split_point], &slice[..split_point], 0);
-        if start == split_point {
+        let start = Self::gallop::<T, false>(&slice[run_length], &slice[..run_length], 0);
+        if start == run_length {
             return;
         }
 
         let end = Self::gallop::<T, true>(
-            &slice[split_point - 1],
-            &slice[split_point..],
-            slice.len() - split_point - 1,
-        ) + split_point;
-        if end == split_point {
+            &slice[run_length - 1],
+            &slice[run_length..],
+            slice.len() - run_length - 1,
+        ) + run_length;
+        if end == run_length {
             return;
         }
 
         let mut min_gallop = MIN_GALLOP;
 
-        if split_point - start <= end - split_point {
+        if run_length - start <= end - run_length {
             Self::merge_low(
                 &mut slice[start..end],
-                split_point - start,
+                run_length - start,
                 buffer,
                 &mut min_gallop,
             );
         } else {
             Self::merge_high(
                 &mut slice[start..end],
-                split_point - start,
+                run_length - start,
                 buffer,
                 &mut min_gallop,
             );
@@ -395,11 +395,11 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
     }
 
     // FIXME: better doc
-    /// Sort the given `slice` assuming `slice[..split_point]` and `slice[split_point..]` are
+    /// Sort the given `slice` assuming `slice[..run_length]` and `slice[run_length..]` are
     /// already sorted.
     fn merge_low<T: Ord>(
         slice: &mut [T],
-        split_point: usize,
+        run_length: usize,
         buffer: &mut [std::mem::MaybeUninit<T>],
         min_gallop: &mut usize,
     ) {
@@ -408,7 +408,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             "We need at least slice.len() buffer size"
         );
         assert!(
-            (0..slice.len()).contains(&split_point),
+            (0..slice.len()).contains(&run_length),
             "Split point has to be within slice bounds"
         );
 
@@ -417,7 +417,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
         (|| {
             // TODO: unchecked this?
             let output = &mut &mut buffer[..slice.len()];
-            let (ref mut left, ref mut right) = slice.split_at_mut(split_point);
+            let (ref mut left, ref mut right) = slice.split_at_mut(run_length);
 
             slice::copy_mut_prefix_to_uninit(right, output, 1);
 
@@ -531,7 +531,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
 
     fn merge_high<T: Ord>(
         slice: &mut [T],
-        split_point: usize,
+        run_length: usize,
         buffer: &mut [std::mem::MaybeUninit<T>],
         min_gallop: &mut usize,
     ) {
@@ -540,14 +540,14 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             "We need at least slice.len() buffer size"
         );
         assert!(
-            (0..slice.len()).contains(&split_point),
+            (0..slice.len()).contains(&run_length),
             "Split point has to be within slice bounds"
         );
 
         (|| {
             // TODO: unchecked this?
             let output = &mut &mut buffer[..slice.len()];
-            let (ref mut left, ref mut right) = slice.split_at_mut(split_point);
+            let (ref mut left, ref mut right) = slice.split_at_mut(run_length);
 
             slice::copy_mut_suffix_to_uninit(left, output, 1);
 
@@ -660,6 +660,50 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                 slice.len(),
             );
         }
+    }
+}
+
+/// Specifies ways to merge tup to `K` adjacent runs in a slice, given a buffer
+pub trait MultiMergingMethod<const K: usize> {
+    /// Whether the merging method is stable
+    const IS_STABLE: bool;
+
+    /// Merge the up to `K` sorted runs `0..run_lengths[0]`, `run_lengths[0]..run_lengths[1]`
+    /// and so forth, using `buffer`.
+    ///
+    /// It should hold that `run_lengths.len() <= K`.
+    fn merge<T: Ord>(
+        slice: &mut [T],
+        run_lengths: &[usize],
+        buffer: &mut [std::mem::MaybeUninit<T>],
+    );
+
+    /// The required capacity of the buffer, needed for merging slices with length less than
+    /// or equal to `size`.
+    fn required_capacity(size: usize) -> usize {
+        size
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CopyAll;
+
+impl<const K: usize> MultiMergingMethod<K> for CopyAll {
+    const IS_STABLE: bool = true;
+
+    fn merge<T: Ord>(
+        slice: &mut [T],
+        run_lengths: &[usize],
+        buffer: &mut [std::mem::MaybeUninit<T>],
+    ) {
+        let mut last = 0;
+        for len in run_lengths {
+            assert!(slice[last..last + *len].is_sorted());
+            last += *len;
+        }
+        assert!(slice[last..].is_sorted());
+
+        slice.sort();
     }
 }
 
