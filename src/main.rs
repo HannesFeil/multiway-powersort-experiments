@@ -186,6 +186,15 @@ mod input {
             #[arg(short, long)]
             power_indexed_stack: bool,
         },
+        /// Powersort
+        MultiwayPowersort {
+            /// Which node power calculation method to use
+            #[arg(short, long, default_value_t = PowersortNodePowerMethod::MostSignificantSetBit)]
+            node_power_method: PowersortNodePowerMethod,
+            /// Which k to use
+            #[arg(short, long, default_value_t = 2)]
+            k: usize,
+        },
     }
 
     macro_rules! with_match_type {
@@ -377,6 +386,30 @@ mod input {
                                     $code
                                 }
                             }
+                        }
+                    }
+                }
+                Algorithm::MultiwayPowersort { node_power_method, k } => {
+                    with_match_const! {
+                        const MERGE_K_RUNS: usize = match (k) {
+                            2 => 2,
+                            4 => 4,
+                            8 => 8,
+                            _ => 0,
+                        }
+
+                        {
+                            type $t = crate::algorithms::powersort::MultiwayPowerSort<
+                                crate::algorithms::powersort::node_power::Trivial,
+                                crate::algorithms::powersort::DefaultInsertionSort,
+                                crate::algorithms::powersort::DefaultMultiMergingMethod,
+                                crate::algorithms::powersort::DefaultBufGuardFactory,
+                                MERGE_K_RUNS,
+                                { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
+                                { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
+                            >;
+
+                            $code
                         }
                     }
                 }
