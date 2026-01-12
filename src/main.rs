@@ -203,6 +203,7 @@ mod input {
                 $(
                     $pattern:pat => $t_value:ty
                 ),*
+                $(; else => $else_expr:expr)?
                 $(,)?
             }
 
@@ -216,6 +217,7 @@ mod input {
                         $code
                     }
                 ),*
+                $(_ => $else_expr)?
             }
         };
     }
@@ -226,6 +228,7 @@ mod input {
                 $(
                     $pattern:pat => $t_value:expr
                 ),*
+                $(; else => $else_expr:expr)?
                 $(,)?
             }
 
@@ -239,6 +242,7 @@ mod input {
                         $code
                     }
                 ),*
+                $(_ => $else_expr)?
             }
         };
     }
@@ -390,26 +394,38 @@ mod input {
                     }
                 }
                 Algorithm::MultiwayPowersort { node_power_method, k } => {
-                    with_match_const! {
-                        const MERGE_K_RUNS: usize = match (k) {
-                            2 => 2,
-                            4 => 4,
-                            8 => 8,
-                            _ => 0,
+                    with_match_type! {
+                        type NodePowerMethod = match (node_power_method) {
+                            PowersortNodePowerMethod::Trivial => crate::algorithms::powersort::node_power::Trivial,
+                            PowersortNodePowerMethod::DivisionLoop => crate::algorithms::powersort::node_power::DivisionLoop,
+                            PowersortNodePowerMethod::BitwiseLoop => crate::algorithms::powersort::node_power::BitwiseLoop,
+                            PowersortNodePowerMethod::MostSignificantSetBit => crate::algorithms::powersort::node_power::MostSignificantSetBit,
                         }
 
                         {
-                            type $t = crate::algorithms::powersort::MultiwayPowerSort<
-                                crate::algorithms::powersort::node_power::Trivial,
-                                crate::algorithms::powersort::DefaultInsertionSort,
-                                crate::algorithms::powersort::DefaultMultiMergingMethod,
-                                crate::algorithms::powersort::DefaultBufGuardFactory,
-                                MERGE_K_RUNS,
-                                { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
-                                { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
-                            >;
+                            with_match_const! {
+                                const MERGE_K_RUNS: usize = match (k) {
+                                    2 => 2,
+                                    4 => 4,
+                                    8 => 8,
+                                    16 => 16;
+                                    else => panic!("Unsupported k"),
+                                }
 
-                            $code
+                                {
+                                    type $t = crate::algorithms::powersort::MultiwayPowerSort<
+                                        NodePowerMethod,
+                                        crate::algorithms::powersort::DefaultInsertionSort,
+                                        crate::algorithms::powersort::DefaultMultiMergingMethod,
+                                        crate::algorithms::powersort::DefaultBufGuardFactory,
+                                        MERGE_K_RUNS,
+                                        { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
+                                        { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
+                                    >;
+
+                                    $code
+                                }
+                            }
                         }
                     }
                 }

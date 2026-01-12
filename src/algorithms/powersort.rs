@@ -431,12 +431,13 @@ pub mod node_power {
     #[derive(Debug, Clone, Copy)]
     pub struct DivisionLoop;
 
-    impl NodePowerMethod<2> for DivisionLoop {
+    impl<const K: usize> NodePowerMethod<K> for DivisionLoop {
         // FIXME: what is correct here?
         const MAX_N: usize = usize::MAX.isqrt();
 
+        // TODO: check if this is correct
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
-            assert!(n <= Self::MAX_N);
+            assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
 
             let n2 = n * 2;
             let mut a = 2 * run_a.start + run_a.len();
@@ -446,8 +447,8 @@ pub mod node_power {
             // FIXME: how should this handle overflows?
             while b - a <= n2 && a / n2 == b / n2 {
                 power += 1;
-                a *= 2;
-                b *= 2;
+                a *= K;
+                b *= K;
             }
 
             power
@@ -457,12 +458,19 @@ pub mod node_power {
     #[derive(Debug, Clone, Copy)]
     pub struct BitwiseLoop;
 
-    impl NodePowerMethod<2> for BitwiseLoop {
-        // TODO: double check this
-        const MAX_N: usize = 1 << (usize::BITS - 1);
+    impl<const K: usize> NodePowerMethod<K> for BitwiseLoop {
+        const MAX_N: usize = {
+            // TODO: is this correct?
+            assert!(K > 1);
+            assert!(K.count_ones() == 1, "K has to be a power of 2");
+
+            1 << (usize::BITS - 1)
+        };
 
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
-            assert!(n <= Self::MAX_N);
+            assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
+
+            let factor: usize = K.trailing_zeros().try_into().unwrap();
 
             let mut l2 = run_a.start + run_a.end;
             let mut r2 = run_b.start + run_b.end;
@@ -484,7 +492,7 @@ pub mod node_power {
                 (digit_a, digit_b) = (l2 >= n, r2 >= n)
             }
 
-            common_bits + 1
+            common_bits / factor + 1
         }
     }
 
@@ -493,13 +501,21 @@ pub mod node_power {
     #[derive(Debug, Clone, Copy)]
     pub struct MostSignificantSetBit;
 
-    impl NodePowerMethod<2> for MostSignificantSetBit {
-        const MAX_N: usize = 1 << (usize::BITS / 2 - 1);
+    impl<const K: usize> NodePowerMethod<K> for MostSignificantSetBit {
+        const MAX_N: usize = {
+            // TODO: is this correct?
+            assert!(K > 1);
+            assert!(K.count_ones() == 1, "K has to be a power of 2");
+
+            1 << (usize::BITS / 2 - 1)
+        };
 
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
-            assert!(n <= Self::MAX_N);
+            assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
 
             const HALF_MASK: usize = usize::MAX >> (usize::BITS / 2);
+
+            let factor: usize = K.trailing_zeros().try_into().unwrap();
 
             let l2 = run_a.start + run_a.end;
             let r2 = run_b.start + run_b.end;
@@ -507,7 +523,7 @@ pub mod node_power {
             let a = ((l2 << 30) / n) & HALF_MASK;
             let b = ((r2 << 30) / n) & HALF_MASK;
 
-            ((a ^ b).leading_zeros() - usize::BITS / 2) as usize
+            (((a ^ b).leading_zeros() - usize::BITS / 2) as usize - 1) / factor + 1
         }
     }
 }
@@ -553,6 +569,18 @@ mod tests {
         DEFAULT_ONLY_INCREASING_RUNS,
     >;
 
+    macro_rules! test_powers {
+        ([$($power:expr),*]: $k:ident => $code:expr) => {
+            $(
+                {
+                    const $k: usize = $power;
+
+                    $code;
+                }
+            );*
+        };
+    }
+
     #[test]
     fn empty() {
         crate::test::test_empty::<PowerSortTrivial>();
@@ -589,17 +617,26 @@ mod tests {
 
     #[test]
     fn node_power_division_loop() {
-        test_node_power_calculations::<node_power::DivisionLoop, 2>();
+        test_powers!(
+            [2, 3, 4, 5, 6, 7, 8]:
+            K => test_node_power_calculations::<node_power::DivisionLoop, K>()
+        );
     }
 
     #[test]
     fn node_power_bitwise_loop() {
-        test_node_power_calculations::<node_power::BitwiseLoop, 2>();
+        test_powers!(
+            [2, 4, 8, 16]:
+            K => test_node_power_calculations::<node_power::BitwiseLoop, K>()
+        );
     }
 
     #[test]
     fn node_power_most_significant_bit_set() {
-        test_node_power_calculations::<node_power::MostSignificantSetBit, 2>();
+        test_powers!(
+            [2, 4, 8, 16]:
+            K => test_node_power_calculations::<node_power::MostSignificantSetBit, K>()
+        );
     }
 
     fn test_node_power_calculations<N: node_power::NodePowerMethod<K>, const K: usize>() {
