@@ -663,47 +663,50 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
     }
 }
 
-/// Specifies ways to merge tup to `K` adjacent runs in a slice, given a buffer
-pub trait MultiMergingMethod<const K: usize> {
-    /// Whether the merging method is stable
-    const IS_STABLE: bool;
+pub mod multi {
 
-    /// Merge the up to `K` sorted runs `0..run_lengths[0]`, `run_lengths[0]..run_lengths[1]`
-    /// and so forth, using `buffer`.
-    ///
-    /// It should hold that `run_lengths.len() <= K`.
-    fn merge<T: Ord>(
-        slice: &mut [T],
-        run_lengths: &[usize],
-        buffer: &mut [std::mem::MaybeUninit<T>],
-    );
+    /// Specifies ways to merge tup to `K` adjacent runs in a slice, given a buffer
+    pub trait MultiMergingMethod<const K: usize> {
+        /// Whether the merging method is stable
+        const IS_STABLE: bool;
 
-    /// The required capacity of the buffer, needed for merging slices with length less than
-    /// or equal to `size`.
-    fn required_capacity(size: usize) -> usize {
-        size
-    }
-}
+        /// Merge the up to `K` sorted runs `0..run_lengths[0]`, `run_lengths[0]..run_lengths[1]`
+        /// and so forth, using `buffer`.
+        ///
+        /// It should hold that `run_lengths.len() <= K`.
+        fn merge<T: Ord>(
+            slice: &mut [T],
+            run_lengths: &[usize],
+            buffer: &mut [std::mem::MaybeUninit<T>],
+        );
 
-#[derive(Debug, Clone, Copy)]
-pub struct CopyAll;
-
-impl<const K: usize> MultiMergingMethod<K> for CopyAll {
-    const IS_STABLE: bool = true;
-
-    fn merge<T: Ord>(
-        slice: &mut [T],
-        run_lengths: &[usize],
-        buffer: &mut [std::mem::MaybeUninit<T>],
-    ) {
-        let mut last = 0;
-        for len in run_lengths {
-            assert!(slice[last..last + *len].is_sorted());
-            last += *len;
+        /// The required capacity of the buffer, needed for merging slices with length less than
+        /// or equal to `size`.
+        fn required_capacity(size: usize) -> usize {
+            size
         }
-        assert!(slice[last..].is_sorted());
+    }
 
-        slice.sort();
+    #[derive(Debug, Clone, Copy)]
+    pub struct CopyAll;
+
+    impl<const K: usize> MultiMergingMethod<K> for CopyAll {
+        const IS_STABLE: bool = true;
+
+        fn merge<T: Ord>(
+            slice: &mut [T],
+            run_lengths: &[usize],
+            buffer: &mut [std::mem::MaybeUninit<T>],
+        ) {
+            let mut last = 0;
+            for len in run_lengths {
+                assert!(slice[last..last + *len].is_sorted());
+                last += *len;
+            }
+            assert!(slice[last..].is_sorted());
+
+            slice.sort();
+        }
     }
 }
 
@@ -923,6 +926,7 @@ mod tests {
         use rand::{Rng as _, RngCore as _};
 
         use super::super::*;
+        use multi::*;
         use super::{TEST_RUNS, TEST_SIZE};
 
         macro_rules! test_multi_methods {
@@ -955,7 +959,7 @@ mod tests {
                 #[test]
                 fn test_correct_stable_merges() {
                         test_multi_methods!(@all_k [3, 4] => K => {
-                        if <$method as MultiMergingMethod<K>>::IS_STABLE {
+                        if <$method as multi::MultiMergingMethod<K>>::IS_STABLE {
                             test_correct_stable_merge::<$method, K>();
                         }
                     });
@@ -982,7 +986,7 @@ mod tests {
         test_multi_methods!(CopyAll);
 
         /// Test merging an empty slice
-        fn test_empty_merge<T: MultiMergingMethod<K>, const K: usize>() {
+        fn test_empty_merge<T: multi::MultiMergingMethod<K>, const K: usize>() {
             let mut elements = [(); 0];
             let mut buffer =
                 <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
@@ -992,7 +996,7 @@ mod tests {
         }
 
         /// Test that two runs are correctly merged
-        fn test_correct_merge<T: MultiMergingMethod<K>, const K: usize>() {
+        fn test_correct_merge<T: multi::MultiMergingMethod<K>, const K: usize>() {
             let mut rng = crate::test::test_rng();
             let mut buffer =
                 <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
@@ -1052,7 +1056,7 @@ mod tests {
         }
 
         /// Test that two runs are correctly merged and the ordering of equal elements remains stable
-        fn test_correct_stable_merge<T: MultiMergingMethod<K>, const K: usize>() {
+        fn test_correct_stable_merge<T: multi::MultiMergingMethod<K>, const K: usize>() {
             let mut rng = crate::test::test_rng();
             let mut buffer =
                 <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
@@ -1115,7 +1119,7 @@ mod tests {
 
         /// Run Merging methods with [`crate::test::RandomOrdered`] elements and
         /// [`crate::test::MaybePanickingOrdered`] elements, mostly useful for running under miri
-        fn test_soundness_merge<T: MultiMergingMethod<K>, const K: usize>() {
+        fn test_soundness_merge<T: multi::MultiMergingMethod<K>, const K: usize>() {
             let mut rng = crate::test::test_rng();
             let mut buffer =
                 <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
