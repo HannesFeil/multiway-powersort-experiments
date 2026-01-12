@@ -964,7 +964,7 @@ mod tests {
                 #[test]
                 fn test_soundness_merges() {
                     test_multi_methods!(@all_k [3, 4] => K => {
-                        test_correct_stable_merge::<$method, K>();
+                        test_soundness_merge::<$method, K>();
                     });
                 }
             };
@@ -1008,7 +1008,7 @@ mod tests {
                 let num_splits = rng.random_range(1..K - 1);
                 let mut last = 0;
                 for i in 0..num_splits {
-                    let split = rng.random_range(1..TEST_SIZE - num_splits - last);
+                    let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
                     elements[last..last + split].sort();
                     splits.push(split);
                     last += split;
@@ -1034,7 +1034,7 @@ mod tests {
                 let num_splits = rng.random_range(1..K - 1);
                 let mut last = 0;
                 for i in 0..num_splits {
-                    let split = rng.random_range(1..TEST_SIZE - num_splits - last);
+                    let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
                     elements[last..last + split].sort();
                     splits.push(split);
                     last += split;
@@ -1069,7 +1069,7 @@ mod tests {
                 let num_splits = rng.random_range(1..K - 1);
                 let mut last = 0;
                 for i in 0..num_splits {
-                    let split = rng.random_range(1..TEST_SIZE - num_splits - last);
+                    let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
                     elements[last..last + split].sort();
                     splits.push(split);
                     last += split;
@@ -1096,7 +1096,7 @@ mod tests {
                 let num_splits = rng.random_range(1..K - 1);
                 let mut last = 0;
                 for i in 0..num_splits {
-                    let split = rng.random_range(1..TEST_SIZE - num_splits - last);
+                    let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
                     elements[last..last + split].sort();
                     splits.push(split);
                     last += split;
@@ -1137,12 +1137,10 @@ mod tests {
                 let num_splits = rng.random_range(1..K - 1);
                 let mut last = 0;
                 for i in 0..num_splits {
-                    let split = rng.random_range(1..TEST_SIZE - num_splits - last);
-                    elements[last..last + split].sort();
+                    let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
                     splits.push(split);
                     last += split;
                 }
-                elements[last..].sort();
 
                 let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     T::merge(&mut elements, &splits, buffer.as_uninit_slice_mut());
@@ -1159,7 +1157,7 @@ mod tests {
                 let num_splits = rng.random_range(1..K - 1);
                 let mut last = 0;
                 for i in 0..num_splits {
-                    let split = rng.random_range(1..TEST_SIZE - num_splits - last);
+                    let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
                     elements[last..last + split].sort();
                     splits.push(split);
                     last += split;
@@ -1195,7 +1193,7 @@ mod tests {
                 let num_splits = rng.random_range(1..K - 1);
                 let mut last = 0;
                 for i in 0..num_splits {
-                    let split = rng.random_range(1..TEST_SIZE - num_splits - last);
+                    let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
                     splits.push(split);
                     last += split;
                 }
