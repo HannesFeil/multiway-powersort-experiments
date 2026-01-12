@@ -117,30 +117,30 @@ impl<
             if ONLY_INCREASING_RUNS {
                 i = left_run_end
                     + crate::algorithms::merging::weakly_increasing_suffix_index(
-                        &mut slice[left_run_end..middle],
+                        &slice[left_run_end..middle],
                     );
                 j = middle - 1
                     + crate::algorithms::merging::weakly_increasing_prefix_index(
-                        &mut slice[middle - 1..right_run_begin],
+                        &slice[middle - 1..right_run_begin],
                     );
             } else {
                 if slice[middle - 1] <= slice[middle] {
                     i = left_run_end
                         + crate::algorithms::merging::weakly_increasing_suffix_index(
-                            &mut slice[left_run_end..middle],
+                            &slice[left_run_end..middle],
                         );
                     j = middle - 1
                         + crate::algorithms::merging::weakly_increasing_prefix_index(
-                            &mut slice[middle - 1..right_run_begin],
+                            &slice[middle - 1..right_run_begin],
                         );
                 } else {
                     i = left_run_end
                         + crate::algorithms::merging::strictly_decreasing_suffix_index(
-                            &mut slice[left_run_end..middle],
+                            &slice[left_run_end..middle],
                         );
                     j = middle - 1
                         + crate::algorithms::merging::strictly_decreasing_prefix_index(
-                            &mut slice[middle - 1..right_run_begin],
+                            &slice[middle - 1..right_run_begin],
                         );
                     slice[i..j].reverse();
                 }
