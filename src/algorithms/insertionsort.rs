@@ -56,9 +56,7 @@ impl<const BINARY: bool> InsertionSort<BINARY> {
         for i in partition_point..slice.len() {
             let j = slice[..i].partition_point(|x| x <= &slice[i]);
 
-            for p in (j..i).rev() {
-                slice.swap(p, p + 1);
-            }
+            slice[j..=i].rotate_right(1);
         }
     }
 }
