@@ -349,7 +349,7 @@ impl RunStack for Stack {
         self.1 = power;
         (power..=top_power)
             .rev()
-            .filter_map(|i| (&mut self.0[i]).take().map(|run| (i, run)))
+            .filter_map(|i| self.0[i].take().map(|run| (i, run)))
     }
 }
 
