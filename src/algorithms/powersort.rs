@@ -12,7 +12,7 @@ pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 pub type DefaultMergingMethod = super::merging::CopyBoth;
 
 /// The default [`super::merging::MultiMergingMethod`] to use
-pub type DefaultMultiMergingMethod = super::merging::CopyAll;
+pub type DefaultMultiMergingMethod = super::merging::multi::CopyAll;
 
 /// The default BufGuardFactory to use
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
@@ -152,7 +152,7 @@ impl<
 pub struct MultiwayPowerSort<
     N: node_power::NodePowerMethod<MERGE_K_RUNS> = DefaultNodePowerMethod,
     I: super::PostfixSort = DefaultInsertionSort,
-    M: super::merging::MultiMergingMethod<MERGE_K_RUNS> = DefaultMultiMergingMethod,
+    M: super::merging::multi::MultiMergingMethod<MERGE_K_RUNS> = DefaultMultiMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const MERGE_K_RUNS: usize = DEFAULT_MERGE_K_RUNS,
     const MIN_RUN_LENGTH: usize = DEFAULT_MIN_RUN_LENGTH,
@@ -167,7 +167,7 @@ pub struct MultiwayPowerSort<
 impl<
     N: node_power::NodePowerMethod<MERGE_K_RUNS>,
     I: super::PostfixSort,
-    M: super::merging::MultiMergingMethod<MERGE_K_RUNS>,
+    M: super::merging::multi::MultiMergingMethod<MERGE_K_RUNS>,
     B: super::BufGuardFactory,
     const MERGE_K_RUNS: usize,
     const MIN_RUN_LENGTH: usize,
@@ -192,7 +192,7 @@ impl<
 impl<
     N: node_power::NodePowerMethod<MERGE_K_RUNS>,
     I: super::PostfixSort,
-    M: super::merging::MultiMergingMethod<MERGE_K_RUNS>,
+    M: super::merging::multi::MultiMergingMethod<MERGE_K_RUNS>,
     B: super::BufGuardFactory,
     const MERGE_K_RUNS: usize,
     const MIN_RUN_LENGTH: usize,
