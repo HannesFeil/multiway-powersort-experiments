@@ -6,7 +6,7 @@ use crate::algorithms::merging::BufGuard as _;
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
 /// The default [`super::merging::MergingMethod`] to use
-pub type DefaultMergingMethod = super::merging::CopyBoth;
+pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
 /// The default BufGuardFactory to use
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
@@ -20,7 +20,7 @@ pub const DEFAULT_ONLY_INCREASING_RUNS: bool = true;
 /// The peeksort [`super::Sort`]
 pub struct PeekSort<
     I: super::Sort = DefaultInsertionSort,
-    M: super::merging::MergingMethod = DefaultMergingMethod,
+    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
     const ONLY_INCREASING_RUNS: bool = DEFAULT_ONLY_INCREASING_RUNS,
@@ -32,7 +32,7 @@ pub struct PeekSort<
 
 impl<
     I: super::Sort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -60,7 +60,7 @@ impl<
 
 impl<
     I: super::Sort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -116,30 +116,30 @@ impl<
             )]
             if ONLY_INCREASING_RUNS {
                 i = left_run_end
-                    + crate::algorithms::merging::weakly_increasing_suffix_index(
+                    + crate::algorithms::merging::util::weakly_increasing_suffix_index(
                         &slice[left_run_end..middle],
                     );
                 j = middle - 1
-                    + crate::algorithms::merging::weakly_increasing_prefix_index(
+                    + crate::algorithms::merging::util::weakly_increasing_prefix_index(
                         &slice[middle - 1..right_run_begin],
                     );
             } else {
                 if slice[middle - 1] <= slice[middle] {
                     i = left_run_end
-                        + crate::algorithms::merging::weakly_increasing_suffix_index(
+                        + crate::algorithms::merging::util::weakly_increasing_suffix_index(
                             &slice[left_run_end..middle],
                         );
                     j = middle - 1
-                        + crate::algorithms::merging::weakly_increasing_prefix_index(
+                        + crate::algorithms::merging::util::weakly_increasing_prefix_index(
                             &slice[middle - 1..right_run_begin],
                         );
                 } else {
                     i = left_run_end
-                        + crate::algorithms::merging::strictly_decreasing_suffix_index(
+                        + crate::algorithms::merging::util::strictly_decreasing_suffix_index(
                             &slice[left_run_end..middle],
                         );
                     j = middle - 1
-                        + crate::algorithms::merging::strictly_decreasing_prefix_index(
+                        + crate::algorithms::merging::util::strictly_decreasing_prefix_index(
                             &slice[middle - 1..right_run_begin],
                         );
                     slice[i..j].reverse();

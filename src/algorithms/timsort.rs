@@ -1,14 +1,12 @@
 //! The timsort implementation
 
-use crate::algorithms::merging::strictly_decreasing_prefix_index;
-
 use super::merging::BufGuard as _;
 
 /// The default insertion sort to use
-pub type DefaultInsertionSort = super::insertionsort::InsertionSort::<true>;
+pub type DefaultInsertionSort = super::insertionsort::InsertionSort<true>;
 
 /// The default [`super::merging::MergingMethod`] to use
-pub type DefaultMergingMethod = super::merging::Galloping;
+pub type DefaultMergingMethod = super::merging::two_way::Galloping;
 
 /// The default BufGuardFactory to use
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
@@ -19,7 +17,7 @@ pub const DEFAULT_MIN_MERGE: usize = 32;
 /// The timsort [`super::Sort`]
 pub struct TimSort<
     I: super::PostfixSort = DefaultInsertionSort,
-    M: super::merging::MergingMethod = DefaultMergingMethod,
+    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const MIN_MERGE: usize = DEFAULT_MIN_MERGE,
 >(
@@ -30,7 +28,7 @@ pub struct TimSort<
 
 impl<
     I: super::PostfixSort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_MERGE: usize,
 > super::Sort for TimSort<I, M, B, MIN_MERGE>
@@ -53,7 +51,7 @@ struct Run {
 
 impl<
     I: super::PostfixSort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_MERGE: usize,
 > TimSort<I, M, B, MIN_MERGE>
@@ -110,13 +108,13 @@ impl<
         }
 
         if slice[0] > slice[1] {
-            let run_end = strictly_decreasing_prefix_index(slice);
+            let run_end = super::merging::util::strictly_decreasing_prefix_index(slice);
 
             slice[..run_end].reverse();
 
             run_end
         } else {
-            super::merging::weakly_increasing_prefix_index(slice)
+            super::merging::util::weakly_increasing_prefix_index(slice)
         }
     }
 
