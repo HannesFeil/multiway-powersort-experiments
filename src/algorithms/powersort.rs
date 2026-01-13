@@ -9,10 +9,10 @@ pub type DefaultNodePowerMethod = node_power::MostSignificantSetBit;
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
 /// The default [`super::merging::MergingMethod`] to use
-pub type DefaultMergingMethod = super::merging::CopyBoth;
+pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
 /// The default [`super::merging::MultiMergingMethod`] to use
-pub type DefaultMultiMergingMethod = super::merging::multi::CopyAll;
+pub type DefaultMultiMergingMethod = super::merging::multi_way::CopyAll;
 
 /// The default BufGuardFactory to use
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
@@ -36,7 +36,7 @@ type Run = std::ops::Range<usize>;
 pub struct PowerSort<
     N: node_power::NodePowerMethod<2> = DefaultNodePowerMethod,
     I: super::PostfixSort = DefaultInsertionSort,
-    M: super::merging::MergingMethod = DefaultMergingMethod,
+    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const MIN_RUN_LENGTH: usize = DEFAULT_MIN_RUN_LENGTH,
     const ONLY_INCREASING_RUNS: bool = DEFAULT_ONLY_INCREASING_RUNS,
@@ -51,7 +51,7 @@ pub struct PowerSort<
 impl<
     N: node_power::NodePowerMethod<2>,
     I: super::PostfixSort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_RUN_LENGTH: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -81,7 +81,7 @@ impl<
 impl<
     N: node_power::NodePowerMethod<2>,
     I: super::PostfixSort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_RUN_LENGTH: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -121,9 +121,9 @@ impl<
 
     fn extend_run<T: Ord>(slice: &mut [T]) -> usize {
         if ONLY_INCREASING_RUNS {
-            super::merging::weakly_increasing_prefix_index(slice)
+            super::merging::util::weakly_increasing_prefix_index(slice)
         } else {
-            match super::merging::weakly_increasing_or_strictly_decreasing_index(slice) {
+            match super::merging::util::weakly_increasing_or_strictly_decreasing_index(slice) {
                 (index, false) => index,
                 (index, true) => {
                     slice[..index].reverse();
@@ -152,7 +152,7 @@ impl<
 pub struct MultiwayPowerSort<
     N: node_power::NodePowerMethod<MERGE_K_RUNS> = DefaultNodePowerMethod,
     I: super::PostfixSort = DefaultInsertionSort,
-    M: super::merging::multi::MultiMergingMethod<MERGE_K_RUNS> = DefaultMultiMergingMethod,
+    M: super::merging::multi_way::MultiMergingMethod<MERGE_K_RUNS> = DefaultMultiMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const MERGE_K_RUNS: usize = DEFAULT_MERGE_K_RUNS,
     const MIN_RUN_LENGTH: usize = DEFAULT_MIN_RUN_LENGTH,
@@ -167,7 +167,7 @@ pub struct MultiwayPowerSort<
 impl<
     N: node_power::NodePowerMethod<MERGE_K_RUNS>,
     I: super::PostfixSort,
-    M: super::merging::multi::MultiMergingMethod<MERGE_K_RUNS>,
+    M: super::merging::multi_way::MultiMergingMethod<MERGE_K_RUNS>,
     B: super::BufGuardFactory,
     const MERGE_K_RUNS: usize,
     const MIN_RUN_LENGTH: usize,
@@ -192,7 +192,7 @@ impl<
 impl<
     N: node_power::NodePowerMethod<MERGE_K_RUNS>,
     I: super::PostfixSort,
-    M: super::merging::multi::MultiMergingMethod<MERGE_K_RUNS>,
+    M: super::merging::multi_way::MultiMergingMethod<MERGE_K_RUNS>,
     B: super::BufGuardFactory,
     const MERGE_K_RUNS: usize,
     const MIN_RUN_LENGTH: usize,
@@ -270,9 +270,9 @@ impl<
 
     fn extend_run<T: Ord>(slice: &mut [T]) -> usize {
         if ONLY_INCREASING_RUNS {
-            super::merging::weakly_increasing_prefix_index(slice)
+            super::merging::util::weakly_increasing_prefix_index(slice)
         } else {
-            match super::merging::weakly_increasing_or_strictly_decreasing_index(slice) {
+            match super::merging::util::weakly_increasing_or_strictly_decreasing_index(slice) {
                 (index, false) => index,
                 (index, true) => {
                     slice[..index].reverse();

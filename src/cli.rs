@@ -260,7 +260,7 @@ macro_rules! with_type {
                         >,
                         true => crate::algorithms::timsort::TimSort<
                             crate::algorithms::timsort::DefaultInsertionSort,
-                            crate::algorithms::merging::CopyBoth,
+                            crate::algorithms::merging::two_way::CopyBoth,
                             crate::algorithms::timsort::DefaultBufGuardFactory,
                             { crate::algorithms::timsort::DEFAULT_MIN_MERGE },
                         >,

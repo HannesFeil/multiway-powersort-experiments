@@ -6,7 +6,7 @@ use crate::algorithms::merging::BufGuard as _;
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
 /// The default [`super::merging::MergingMethod`] to use
-pub type DefaultMergingMethod = super::merging::CopyBoth;
+pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
 /// The default BufGuardFactory to use
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
@@ -20,7 +20,7 @@ pub const DEFAULT_CHECK_SORTED: bool = true;
 /// The Top-Down Mergesort [`super::Sort`]
 pub struct TopDownMergeSort<
     I: super::Sort = DefaultInsertionSort,
-    M: super::merging::MergingMethod = DefaultMergingMethod,
+    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
     const CHECK_SORTED: bool = DEFAULT_CHECK_SORTED,
@@ -32,7 +32,7 @@ pub struct TopDownMergeSort<
 
 impl<
     I: super::Sort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
@@ -55,7 +55,7 @@ impl<
 
 impl<
     I: super::Sort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
@@ -82,7 +82,7 @@ impl<
 /// The Bottom-Up Mergesort [`super::Sort`]
 pub struct BottomUpMergeSort<
     I: super::Sort = DefaultInsertionSort,
-    M: super::merging::MergingMethod = DefaultMergingMethod,
+    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
     const CHECK_SORTED: bool = DEFAULT_CHECK_SORTED,
@@ -94,7 +94,7 @@ pub struct BottomUpMergeSort<
 
 impl<
     I: super::Sort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
@@ -117,7 +117,7 @@ impl<
 
 impl<
     I: super::Sort,
-    M: super::merging::MergingMethod,
+    M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
