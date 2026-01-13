@@ -185,7 +185,7 @@ impl<
         // Conservatively initiate a buffer big enough to merge the complete array
         let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
 
-        Self::powersort(slice, buffer.as_uninit_slice_mut());
+        Self::multiway_powersort(slice, buffer.as_uninit_slice_mut());
     }
 }
 
@@ -199,9 +199,10 @@ impl<
     const ONLY_INCREASING_RUNS: bool,
 > MultiwayPowerSort<N, I, M, B, MERGE_K_RUNS, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS>
 {
-    fn powersort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
+    fn multiway_powersort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
         // TODO: unwrap?
-        let max_stack_height = usize::try_from(slice.len().ilog(MERGE_K_RUNS)).unwrap() + 2;
+        let max_stack_height =
+            (MERGE_K_RUNS - 1) * (usize::try_from(slice.len().ilog(MERGE_K_RUNS)).unwrap() + 2);
         let mut stack = PowerIndexedStack::new(max_stack_height);
         // NOTE: We technically only need `MERGE_K_RUNS - 1` but that is feature gated
         let mut split_points = [0; MERGE_K_RUNS];
@@ -569,6 +570,16 @@ mod tests {
         DEFAULT_ONLY_INCREASING_RUNS,
     >;
 
+    type PowerSortTrivialMulti8 = MultiwayPowerSort<
+        node_power::Trivial,
+        DefaultInsertionSort,
+        DefaultMultiMergingMethod,
+        DefaultBufGuardFactory,
+        8,
+        DEFAULT_MIN_RUN_LENGTH,
+        DEFAULT_ONLY_INCREASING_RUNS,
+    >;
+
     macro_rules! test_powers {
         ([$($power:expr),*]: $k:ident => $code:expr) => {
             $(
@@ -603,16 +614,19 @@ mod tests {
     #[test]
     fn multi_empty() {
         crate::test::test_empty::<PowerSortTrivialMulti4>();
+        crate::test::test_empty::<PowerSortTrivialMulti8>();
     }
 
     #[test]
     fn multi_random() {
         crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti4>();
+        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti8>();
     }
 
     #[test]
     fn multi_random_stable() {
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti4>();
+        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti8>();
     }
 
     #[test]
