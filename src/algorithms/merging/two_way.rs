@@ -459,9 +459,9 @@ mod tests {
     use rand::{Rng as _, RngCore as _};
 
     /// How big the test arrays should be
-    const TEST_SIZE: usize = 100;
+    const TEST_SIZE: usize = 1000;
     /// How many times to run each test
-    const TEST_RUNS: usize = 100;
+    const TEST_RUNS: usize = 1000;
 
     macro_rules! test_methods {
         ($($method:ident),*) => {

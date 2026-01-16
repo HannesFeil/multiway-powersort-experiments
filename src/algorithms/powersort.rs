@@ -535,8 +535,8 @@ mod tests {
 
     use super::*;
 
-    const RUNS: usize = 20;
-    const TEST_SIZE: usize = 100_000;
+    const RUNS: usize = crate::test::DEFAULT_RUNS;
+    const TEST_SIZE: usize = crate::test::DEFAULT_TEST_SIZE;
 
     // Test under the assumption, that node_power::Trivial is correct
 

@@ -2,6 +2,11 @@
 
 use rand::{Rng as _, SeedableRng as _, seq::SliceRandom as _};
 
+/// The default test size to use
+pub const DEFAULT_TEST_SIZE: usize = 10_000;
+/// The default runs to use
+pub const DEFAULT_RUNS: usize = 100;
+
 /// The seed shared by all tests
 pub const TEST_SEED: u64 = 0xa8bf17eb656f828d;
 /// The rng used by each test
