@@ -205,8 +205,8 @@ impl<
 mod tests {
     use super::*;
 
-    const RUNS: usize = 100;
-    const TEST_SIZE: usize = 100_000;
+    const RUNS: usize = crate::test::DEFAULT_RUNS;
+    const TEST_SIZE: usize = crate::test::DEFAULT_TEST_SIZE;
 
     #[test]
     fn empty() {

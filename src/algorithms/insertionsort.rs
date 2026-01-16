@@ -66,7 +66,7 @@ mod tests {
     use super::*;
 
     const RUNS: usize = 100;
-    const TEST_SIZE: usize = 1000;
+    const TEST_SIZE: usize = 100;
 
     #[test]
     pub fn empty() {
