@@ -23,9 +23,9 @@ pub trait MultiMergingMethod<const K: usize> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct CopyAll;
+pub struct DynamicTournamentTree;
 
-impl<const K: usize> MultiMergingMethod<K> for CopyAll {
+impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
     const IS_STABLE: bool = true;
 
     fn merge<T: Ord>(
@@ -33,14 +33,116 @@ impl<const K: usize> MultiMergingMethod<K> for CopyAll {
         run_lengths: &[usize],
         buffer: &mut [std::mem::MaybeUninit<T>],
     ) {
-        let mut last = 0;
+        let run_slice = &mut &*slice;
+        let mut run_slices = Vec::with_capacity(run_lengths.len() + 1);
         for len in run_lengths {
-            assert!(slice[last..last + *len].is_sorted());
-            last += *len;
+            let next_run = run_slice
+                .split_off(..*len)
+                .expect("Sum of run_lengths should not be larger than slice.len()");
+            run_slices.push(next_run);
         }
-        assert!(slice[last..].is_sorted());
+        run_slices.push(*run_slice);
+        let mut runs: Box<_> = run_slices.iter_mut().collect();
+        let output = &mut &mut buffer[..slice.len()];
 
-        slice.sort();
+        // let nodes = Vec::with_capacity(runs.len() - 1);
+
+        unimplemented!("Actually implement a dynamic tournament tree ...");
+
+        // FIXME aaaahhhh
+
+        // TODO: safety comment
+        // unsafe {
+        //     std::ptr::copy_nonoverlapping(
+        //         buffer.as_ptr() as *const T,
+        //         slice.as_mut_ptr(),
+        //         slice.len(),
+        //     );
+        // }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MergeRunsIndices4;
+
+// FIX: this K is incorrect
+impl<const K: usize> MultiMergingMethod<K> for MergeRunsIndices4 {
+    const IS_STABLE: bool = true;
+
+    fn merge<T: Ord>(
+        slice: &mut [T],
+        run_lengths: &[usize],
+        buffer: &mut [std::mem::MaybeUninit<T>],
+    ) {
+        let run_slice = &mut &*slice;
+        let mut run_slices: [&[T]; 4] = [&[]; 4];
+        let mut index = 0;
+        for len in run_lengths {
+            let next_run = run_slice
+                .split_off(..*len)
+                .expect("Sum of run_lengths should not be larger than slice.len()");
+            run_slices[index] = next_run;
+            index += 1;
+        }
+        run_slices[index] = run_slice;
+        for slice in run_slices {
+            assert!(slice.is_sorted());
+        }
+        let runs: Box<_> = run_slices.iter_mut().collect();
+        let output = &mut &mut *buffer;
+        let mut x =
+            if runs[0].first().map(std::cmp::Reverse) >= runs[1].first().map(std::cmp::Reverse) {
+                0
+            } else {
+                1
+            };
+        let mut y =
+            if runs[2].first().map(std::cmp::Reverse) >= runs[3].first().map(std::cmp::Reverse) {
+                2
+            } else {
+                3
+            };
+        let mut z =
+            if runs[x].first().map(std::cmp::Reverse) >= runs[y].first().map(std::cmp::Reverse) {
+                x
+            } else {
+                y
+            };
+        for _ in 0..slice.len() {
+            super::slice::copy_prefix_to_uninit(runs[z], output, 1);
+            if z <= 1 {
+                x = if runs[0].first().map(std::cmp::Reverse)
+                    >= runs[1].first().map(std::cmp::Reverse)
+                {
+                    0
+                } else {
+                    1
+                };
+            } else {
+                y = if runs[2].first().map(std::cmp::Reverse)
+                    >= runs[3].first().map(std::cmp::Reverse)
+                {
+                    2
+                } else {
+                    3
+                };
+            }
+            z = if runs[x].first().map(std::cmp::Reverse) >= runs[y].first().map(std::cmp::Reverse)
+            {
+                x
+            } else {
+                y
+            };
+        }
+
+        // TODO: safety comment
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                buffer.as_ptr() as *const T,
+                slice.as_mut_ptr(),
+                slice.len(),
+            );
+        }
     }
 }
 
@@ -58,35 +160,35 @@ mod tests {
     const TEST_RUNS: usize = 1000;
 
     macro_rules! test_multi_methods {
-        ($($method:ident),*) => {
+        ($($method:ident: [$($k:expr),+]),+$(,)?) => {
             $(
                 paste::paste! {
                     mod [< $method:snake >] {
                         use super::*;
 
-                        test_multi_methods!(@single $method);
+                        test_multi_methods!(@single $method [$($k),*]);
                     }
                 }
             )*
         };
-        (@single $method:ident) => {
+        (@single $method:ident [$($k:expr),*]) => {
             #[test]
             fn test_empty_merges() {
-                test_multi_methods!(@all_k [3, 4] => K => {
+                test_multi_methods!(@all_k [$($k),*] => K => {
                     test_empty_merge::<$method, K>();
                 });
             }
 
             #[test]
             fn test_correct_merges() {
-                test_multi_methods!(@all_k [3, 4] => K => {
+                test_multi_methods!(@all_k [$($k),*] => K => {
                     test_correct_merge::<$method, K>();
                 });
             }
 
             #[test]
             fn test_correct_stable_merges() {
-                    test_multi_methods!(@all_k [3, 4] => K => {
+                    test_multi_methods!(@all_k [$($k),*] => K => {
                     if <$method as MultiMergingMethod<K>>::IS_STABLE {
                         test_correct_stable_merge::<$method, K>();
                     }
@@ -95,7 +197,7 @@ mod tests {
 
             #[test]
             fn test_soundness_merges() {
-                test_multi_methods!(@all_k [3, 4] => K => {
+                test_multi_methods!(@all_k [$($k),*] => K => {
                     test_soundness_merge::<$method, K>();
                 });
             }
@@ -111,7 +213,10 @@ mod tests {
         };
     }
 
-    test_multi_methods!(CopyAll);
+    test_multi_methods! {
+        DynamicTournamentTree: [2, 3, 4, 5, 6, 7, 8],
+        MergeRunsIndices4: [4],
+    }
 
     /// Test merging an empty slice
     fn test_empty_merge<T: MultiMergingMethod<K>, const K: usize>() {
