@@ -12,7 +12,7 @@ pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
 /// The default [`super::merging::MultiMergingMethod`] to use
-pub type DefaultMultiMergingMethod = super::merging::multi_way::CopyAll;
+pub type DefaultMultiMergingMethod = super::merging::multi_way::DynamicTournamentTree;
 
 /// The default BufGuardFactory to use
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
