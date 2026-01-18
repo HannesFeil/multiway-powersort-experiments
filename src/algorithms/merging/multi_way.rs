@@ -5,6 +5,9 @@ pub trait MultiMergingMethod<const K: usize> {
     /// Whether the merging method is stable
     const IS_STABLE: bool;
 
+    /// String representation of this merging method
+    fn display() -> String;
+
     /// Merge the up to `K` sorted runs `0..run_lengths[0]`, `run_lengths[0]..run_lengths[1]`
     /// and so forth, using `buffer`.
     ///
@@ -27,6 +30,10 @@ pub struct DynamicTournamentTree;
 
 impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
     const IS_STABLE: bool = true;
+
+    fn display() -> String {
+        "dynamic-tournament-tree".to_string()
+    }
 
     fn merge<T: Ord>(
         slice: &mut [T],
@@ -68,6 +75,10 @@ pub struct MergeRunsIndices4;
 // FIX: this K is incorrect
 impl<const K: usize> MultiMergingMethod<K> for MergeRunsIndices4 {
     const IS_STABLE: bool = true;
+
+    fn display() -> String {
+        "merge-runs-indices-4".to_string()
+    }
 
     fn merge<T: Ord>(
         slice: &mut [T],

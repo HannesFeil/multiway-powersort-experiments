@@ -35,6 +35,17 @@ impl<
 {
     const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
 
+    const BASE_NAME: &str = "timsort";
+
+    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
+        vec![
+            ("i-sort", super::display_inline::<I>()),
+            ("merging", M::display()),
+            ("min-merge", MIN_MERGE.to_string()),
+        ]
+        .into_iter()
+    }
+
     fn sort<T: Ord>(slice: &mut [T]) {
         let mut buffer = B::Guard::with_capacity(slice.len());
 

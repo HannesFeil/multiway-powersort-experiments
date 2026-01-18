@@ -11,6 +11,12 @@ pub struct InsertionSort<const BINARY: bool = DEFAULT_BINARY>;
 impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
     const IS_STABLE: bool = true;
 
+    const BASE_NAME: &str = "insertionsort";
+
+    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
+        vec![("binary", BINARY.to_string())].into_iter()
+    }
+
     fn sort<T: Ord>(slice: &mut [T], split_point: usize) {
         if slice.len() < 2 {
             return;

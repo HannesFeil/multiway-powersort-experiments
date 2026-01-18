@@ -3,6 +3,9 @@ pub trait MergingMethod {
     /// Whether the merging method is stable
     const IS_STABLE: bool;
 
+    /// String representation of this merging method
+    fn display() -> String;
+
     /// Merge the two sorted runs `0..run_length` and `run_length..slice.len()`, potentially
     /// using `buffer`.
     fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]);
@@ -23,6 +26,10 @@ pub struct CopyBoth;
 
 impl MergingMethod for CopyBoth {
     const IS_STABLE: bool = true;
+
+    fn display() -> String {
+        "copy-both".to_string()
+    }
 
     fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
         if slice.is_empty() {
@@ -87,6 +94,10 @@ pub struct Galloping<const MIN_GALLOP: usize = 7>;
 
 impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
     const IS_STABLE: bool = true; // TODO: check this
+
+    fn display() -> String {
+        format!("galloping (MIN_GALLOP = {MIN_GALLOP})")
+    }
 
     fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
         if slice.len() < 2 || run_length == 0 {

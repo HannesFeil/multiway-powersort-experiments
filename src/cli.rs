@@ -1,7 +1,5 @@
 //! Command line input handling
 
-use crate::algorithms::Sort;
-
 /// Command line arguments
 #[derive(clap::Parser)]
 #[command(
@@ -14,8 +12,11 @@ use crate::algorithms::Sort;
 )]
 pub struct Args {
     /// The sorting algorithm to run
-    #[command(subcommand)]
+    #[arg()]
     pub algorithm: Algorithm,
+    /// The algorithm variant, use `-v=-1` to print available options
+    #[arg(short, long, default_value_t = 0)]
+    pub variant: isize,
     /// The number of runs to do
     #[arg(long, default_value_t = 1_000)]
     pub runs: usize,
@@ -30,326 +31,187 @@ pub struct Args {
     pub seed: Option<u64>,
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum PowersortNodePowerMethod {
-    Trivial,
-    DivisionLoop,
-    BitwiseLoop,
-    MostSignificantSetBit,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Algorithm {
+    /// The default sort in [`std`]
+    Std,
+    /// Insertionsort
+    Insertionsort,
+    /// Quicksort
+    Quicksort,
+    /// Peeksort
+    Peeksort,
+    /// Mergesort
+    Mergesort,
+    /// Timsort
+    Timsort,
+    /// Powersort
+    Powersort,
+    /// Powersort
+    MultiwayPowersort,
 }
 
-impl std::fmt::Display for PowersortNodePowerMethod {
+impl std::fmt::Display for Algorithm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(clap::ValueEnum::to_possible_value(self).unwrap().get_name())
     }
 }
+macro_rules! declare_variants {
+    (
+        $name:ident {
+            $(
+                $top_algorithm:pat => [
+                    $(
+                        $variant:ty
+                    ),*
+                    $(,)?
+                ]
+            ),*
+            $(,)?
+        }
+    ) => {
+        pub struct $name;
 
-#[derive(Debug, clap::Subcommand)]
-pub enum Algorithm {
-    /// The default sort in [`std`]
-    Std {
-        /// Whether to use the unstable version
-        #[arg(short, long)]
-        unstable: bool,
-    },
-    /// Insertionsort
-    Insertionsort {
-        /// Whether to use the binary version
-        #[arg(short, long)]
-        binary: bool,
-    },
-    /// Quicksort
-    Quicksort {
-        /// Abort on already sorted slice
-        #[arg(short, long)]
-        check_sorted: bool,
-    },
-    /// Peeksort
-    Peeksort {
-        /// Whether to also peek for and reverse decreasing runs
-        #[arg(short, long)]
-        find_decreasing: bool,
-    },
-    /// Mergesort
-    Mergesort {
-        /// Whether to use bottom up merging instead of top down
-        #[arg(short, long)]
-        bottom_up: bool,
-        /// Abort on already sorted slice
-        #[arg(short, long)]
-        check_sorted: bool,
-    },
-    /// Timsort
-    Timsort {
-        /// Whether to use [`crate::algorithms::merging::CopyBoth`], turning this into Trotsort
-        #[arg(short, long)]
-        simple_merging: bool,
-    },
-    /// Powersort
-    Powersort {
-        /// Which node power calculation method to use
-        #[arg(short, long, default_value_t = PowersortNodePowerMethod::MostSignificantSetBit)]
-        node_power_method: PowersortNodePowerMethod,
-        /// Whether to use a power indexed stack
-        #[arg(short, long)]
-        power_indexed_stack: bool,
-    },
-    /// Powersort
-    MultiwayPowersort {
-        /// Which node power calculation method to use
-        #[arg(short, long, default_value_t = PowersortNodePowerMethod::MostSignificantSetBit)]
-        node_power_method: PowersortNodePowerMethod,
-        /// Which k to use
-        #[arg(short, long, default_value_t = 2)]
-        k: usize,
-    },
-}
-
-macro_rules! with_match_type {
-        (
-            type $t:ident = match ($value:expr) {
-                $(
-                    $pattern:pat => $t_value:ty
-                ),*
-                $(; else => $else_expr:expr)?
-                $(,)?
+        impl $name {
+            pub fn variants(algorithm: Algorithm) -> impl Iterator<Item = String> {
+                let mut variants = Vec::new();
+                declare_variants! { @match_algorithm
+                    algorithm => Variant
+                    ($(
+                        $top_algorithm => [
+                            $($variant),*
+                        ]
+                    ),*)
+                    {
+                        variants.push(display::<Variant>())
+                    }
+                }
+                variants.into_iter()
             }
 
-            $code:block
-        ) => {
-            match $value {
-                $(
-                    $pattern => {
-                        type $t = $t_value;
+            pub fn sorter<T: Ord>(algorithm: Algorithm, variant: usize) -> Option<fn(&mut [T])> {
+                let mut index = 0;
 
-                        $code
+                declare_variants! { @match_algorithm
+                    algorithm => Variant
+                    ($(
+                        $top_algorithm => [
+                            $($variant),*
+                        ]
+                    ),*)
+                    {
+                        if variant == index {
+                            return Some(<Variant as Sort>::sort);
+                        } else {
+                            index += 1;
+                        }
                     }
-                ),*
-                $(_ => $else_expr)?
-            }
-        };
-    }
+                }
 
-macro_rules! with_match_const {
-        (
-            const $t:ident: $t_type:ty = match ($value:expr) {
-                $(
-                    $pattern:pat => $t_value:expr
-                ),*
-                $(; else => $else_expr:expr)?
-                $(,)?
+                None
             }
 
-            $code:block
-        ) => {
-            match $value {
-                $(
-                    $pattern => {
-                        const $t: $t_type = $t_value;
+            pub fn is_stable(algorithm: Algorithm, variant: usize) -> Option<bool> {
+                let mut index = 0;
 
-                        $code
+                declare_variants! { @match_algorithm
+                    algorithm => Variant
+                    ($(
+                        $top_algorithm => [
+                            $($variant),*
+                        ]
+                    ),*)
+                    {
+                        if variant == index {
+                            return Some(<Variant as Sort>::IS_STABLE);
+                        } else {
+                            index += 1;
+                        }
                     }
-                ),*
-                $(_ => $else_expr)?
+                }
+
+                None
             }
-        };
-    }
-
-macro_rules! with_type {
-        ($alg:expr => $t:ident, $code:block) => {
-            match $alg {
-                Algorithm::Std { unstable } => with_match_const! {
-                    const STABLE: bool = match (unstable) {
-                        true => false,
-                        false => true,
-                    }
-
-                    {
-                        type $t = crate::algorithms::StdSort::<STABLE>;
-
-                        $code
-                    }
-                },
-                Algorithm::Insertionsort { binary } => with_match_const! {
-                    const BINARY: bool = match (binary) {
-                        true => true,
-                        false => false,
-                    }
-
-                    {
-                        type $t = crate::algorithms::insertionsort::InsertionSort::<BINARY>;
-
-                        $code
-                    }
-                },
-                Algorithm::Quicksort { check_sorted } => with_match_const! {
-                    const CHECK_SORTED: bool = match (check_sorted) {
-                        true => true,
-                        false => false,
-                    }
-
-                    {
-                        type $t = crate::algorithms::quicksort::QuickSort::<
-                            crate::algorithms::quicksort::DefaultRngFactory,
-                            crate::algorithms::quicksort::DefaultInsertionSort,
-                            { crate::algorithms::quicksort::DEFAULT_INSERTION_THRESHOLD },
-                            { crate::algorithms::quicksort::DEFAULT_NINTHER_THRESHOLD },
-                            CHECK_SORTED,
-                        >;
-
-                        $code
-                    }
-                },
-                Algorithm::Peeksort { find_decreasing } => with_match_const! {
-                    const ONLY_INCREASING: bool = match (find_decreasing) {
-                        true => true,
-                        false => false,
-                    }
-
-                    {
-                        type $t = crate::algorithms::peeksort::PeekSort::<
-                            crate::algorithms::peeksort::DefaultInsertionSort,
-                            crate::algorithms::peeksort::DefaultMergingMethod,
-                            crate::algorithms::peeksort::DefaultBufGuardFactory,
-                            { crate::algorithms::peeksort::DEFAULT_INSERTION_THRESHOLD },
-                            ONLY_INCREASING,
-                        >;
-
-                        $code
-                    }
-                },
-                Algorithm::Mergesort {
-                    bottom_up,
-                    check_sorted,
-                } => with_match_const! {
-                    const CHECK_SORTED: bool = match (check_sorted) {
-                        true => true,
-                        false => false,
-                    }
-
-                    {
-                        with_match_type! {
-                            type $t = match (bottom_up) {
-                                true => crate::algorithms::mergesort::BottomUpMergeSort::<
-                                    crate::algorithms::mergesort::DefaultInsertionSort,
-                                    crate::algorithms::mergesort::DefaultMergingMethod,
-                                    crate::algorithms::mergesort::DefaultBufGuardFactory,
-                                    { crate::algorithms::mergesort::DEFAULT_INSERTION_THRESHOLD },
-                                    CHECK_SORTED,
-                                >,
-                                false => crate::algorithms::mergesort::TopDownMergeSort::<
-                                    crate::algorithms::mergesort::DefaultInsertionSort,
-                                    crate::algorithms::mergesort::DefaultMergingMethod,
-                                    crate::algorithms::mergesort::DefaultBufGuardFactory,
-                                    { crate::algorithms::mergesort::DEFAULT_INSERTION_THRESHOLD },
-                                    CHECK_SORTED,
-                                >,
-                            }
+        }
+    };
+    (@match_algorithm
+        $alg:expr => $variant_name:ident
+        ($(
+            $top_algorithm:pat => [
+                $($variant:ty),*
+            ]
+        ),*)
+        $code:block
+    ) => {
+        match $alg {
+            $(
+                $top_algorithm => {
+                    $(
+                        {
+                            type $variant_name = $variant;
 
                             $code
                         }
-                    }
-                },
-                Algorithm::Timsort { simple_merging } => with_match_type! {
-                    type $t = match (simple_merging) {
-                        false => crate::algorithms::timsort::TimSort<
-                            crate::algorithms::timsort::DefaultInsertionSort,
-                            crate::algorithms::timsort::DefaultMergingMethod,
-                            crate::algorithms::timsort::DefaultBufGuardFactory,
-                            { crate::algorithms::timsort::DEFAULT_MIN_MERGE },
-                        >,
-                        true => crate::algorithms::timsort::TimSort<
-                            crate::algorithms::timsort::DefaultInsertionSort,
-                            crate::algorithms::merging::two_way::CopyBoth,
-                            crate::algorithms::timsort::DefaultBufGuardFactory,
-                            { crate::algorithms::timsort::DEFAULT_MIN_MERGE },
-                        >,
-                    }
-
-                    $code
-                },
-                Algorithm::Powersort { node_power_method, power_indexed_stack } => {
-                    with_match_type! {
-                        type M = match (node_power_method) {
-                            PowersortNodePowerMethod::Trivial => crate::algorithms::powersort::node_power::Trivial,
-                            PowersortNodePowerMethod::DivisionLoop => crate::algorithms::powersort::node_power::DivisionLoop,
-                            PowersortNodePowerMethod::BitwiseLoop => crate::algorithms::powersort::node_power::BitwiseLoop,
-                            PowersortNodePowerMethod::MostSignificantSetBit => crate::algorithms::powersort::node_power::MostSignificantSetBit,
-                        }
-
-                        {
-                            with_match_const! {
-                                const USE_POWER_INDEXED_STACK: bool = match (power_indexed_stack) {
-                                    true => true,
-                                    false => false,
-                                }
-
-                                {
-                                    type $t = crate::algorithms::powersort::PowerSort<
-                                        M,
-                                        crate::algorithms::powersort::DefaultInsertionSort,
-                                        crate::algorithms::powersort::DefaultMergingMethod,
-                                        crate::algorithms::powersort::DefaultBufGuardFactory,
-                                        { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
-                                        { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
-                                        USE_POWER_INDEXED_STACK,
-                                    >;
-
-                                    $code
-                                }
-                            }
-                        }
-                    }
+                    )*
                 }
-                Algorithm::MultiwayPowersort { node_power_method, k } => {
-                    with_match_type! {
-                        type NodePowerMethod = match (node_power_method) {
-                            PowersortNodePowerMethod::Trivial => crate::algorithms::powersort::node_power::Trivial,
-                            PowersortNodePowerMethod::DivisionLoop => crate::algorithms::powersort::node_power::DivisionLoop,
-                            PowersortNodePowerMethod::BitwiseLoop => crate::algorithms::powersort::node_power::BitwiseLoop,
-                            PowersortNodePowerMethod::MostSignificantSetBit => crate::algorithms::powersort::node_power::MostSignificantSetBit,
-                        }
+            )*
+        }
+    };
+}
 
-                        {
-                            with_match_const! {
-                                const MERGE_K_RUNS: usize = match (k) {
-                                    2 => 2,
-                                    4 => 4,
-                                    8 => 8,
-                                    16 => 16;
-                                    else => panic!("Unsupported k"),
-                                }
+use crate::algorithms::*;
 
-                                {
-                                    type $t = crate::algorithms::powersort::MultiwayPowerSort<
-                                        NodePowerMethod,
-                                        crate::algorithms::powersort::DefaultInsertionSort,
-                                        crate::algorithms::powersort::DefaultMultiMergingMethod,
-                                        crate::algorithms::powersort::DefaultBufGuardFactory,
-                                        MERGE_K_RUNS,
-                                        { crate::algorithms::powersort::DEFAULT_MIN_RUN_LENGTH },
-                                        { crate::algorithms::powersort::DEFAULT_ONLY_INCREASING_RUNS },
-                                    >;
+// TODO: fill variants
+declare_variants! {
+    AlgorithmVariants {
+        Algorithm::Std => [
+            StdSort,
+            StdSort<false>,
+        ],
+        Algorithm::Insertionsort => [
+            insertionsort::InsertionSort,
+            insertionsort::InsertionSort<true>,
+        ],
+        Algorithm::Quicksort => [
+            quicksort::QuickSort,
+            quicksort::QuickSort<
+                quicksort::DefaultRngFactory,
+                quicksort::DefaultInsertionSort,
+                { quicksort::DEFAULT_INSERTION_THRESHOLD },
+                { quicksort::DEFAULT_NINTHER_THRESHOLD },
+                true
+            >,
+        ],
+        Algorithm::Peeksort => [
+            peeksort::PeekSort
+        ],
+        Algorithm::Mergesort => [
+            mergesort::TopDownMergeSort
+        ],
+        Algorithm::Timsort => [
+            timsort::TimSort
+        ],
+        Algorithm::Powersort => [
+            powersort::PowerSort
+        ],
+        Algorithm::MultiwayPowersort => [
+            powersort::MultiwayPowerSort
+        ],
+    }
+}
 
-                                    $code
-                                }
-                            }
-                        }
-                    }
+impl AlgorithmVariants {
+    pub fn validate(algorithm: Algorithm, variant: isize) -> Option<usize> {
+        match variant.try_into() {
+            Err(_) => None,
+            Ok(result) => {
+                if result < Self::variants(algorithm).count() {
+                    Some(result)
+                } else {
+                    None
                 }
             }
-        };
-    }
-
-impl Algorithm {
-    /// Returns if this is a stable sort
-    pub fn is_stable(&self) -> bool {
-        with_type! { self => S, { S::IS_STABLE } }
-    }
-
-    /// Returns the sorting function
-    pub fn sorter<T: Ord>(&self) -> fn(&mut [T]) {
-        with_type! { self => S, { S::sort } }
+        }
     }
 }
 

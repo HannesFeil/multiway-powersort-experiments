@@ -14,15 +14,28 @@ mod test;
 fn main() {
     let cli::Args {
         algorithm,
+        variant,
         runs,
         size,
         data,
         seed,
     } = cli::Args::parse();
 
+    let Some(variant) = cli::AlgorithmVariants::validate(algorithm, variant) else {
+        println!("Invalid variant {variant} for algorithm {algorithm}");
+        println!("Possible variants:");
+        for (index, variant) in cli::AlgorithmVariants::variants(algorithm).enumerate() {
+            println!("{index:>3}: {variant}");
+        }
+        return;
+    };
+
     println!(
-        "Running measurements for the following algorithm:\n{algorithm:?} (stable: {stable})",
-        stable = algorithm.is_stable(),
+        "Running measurements for the following (stable: {stable}) algorithm:\n{alg}",
+        alg = cli::AlgorithmVariants::variants(algorithm)
+            .nth(variant)
+            .unwrap(),
+        stable = cli::AlgorithmVariants::is_stable(algorithm, variant).unwrap(),
     );
     println!("Runs: {runs}, Slice size: {size}, Data type: {data}");
 
@@ -36,12 +49,14 @@ fn main() {
         }
     };
 
+    let sorter = cli::AlgorithmVariants::sorter(algorithm, variant).unwrap();
+
     let (samples, stats) = match data {
         cli::DataType::UniformU32 => {
-            perform_experiment::<u32, data::UniformData<u32>>(algorithm, runs, size, &mut rng)
+            perform_experiment::<u32, data::UniformData<u32>>(sorter, runs, size, &mut rng)
         }
         cli::DataType::PermutationU32 => {
-            perform_experiment::<u32, data::PermutationData<u32>>(algorithm, runs, size, &mut rng)
+            perform_experiment::<u32, data::PermutationData<u32>>(sorter, runs, size, &mut rng)
         }
     };
 
@@ -54,12 +69,11 @@ fn main() {
 /// - size: The size of the slices to sort
 /// - rng: The rng used for sampling the data
 fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
-    algorithm: cli::Algorithm,
+    sorter: fn(&mut [T]),
     runs: usize,
     size: usize,
     rng: &mut impl rand::Rng,
 ) -> (Vec<std::time::Duration>, rolling_stats::Stats<f64>) {
-    let sorter = algorithm.sorter();
     let mut samples = Vec::with_capacity(runs);
 
     let mut stats: rolling_stats::Stats<f64> = rolling_stats::Stats::new();

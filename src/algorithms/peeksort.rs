@@ -40,6 +40,18 @@ impl<
 {
     const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
 
+    const BASE_NAME: &str = "peeksort";
+
+    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
+        vec![
+            ("i-sort", super::display_inline::<I>()),
+            ("merging", M::display()),
+            ("i-threshold", INSERTION_THRESHOLD.to_string()),
+            ("only-increasing", ONLY_INCREASING_RUNS.to_string()),
+        ]
+        .into_iter()
+    }
+
     fn sort<T: Ord>(slice: &mut [T], split_point: usize) {
         if slice.len() < 2 {
             return;
