@@ -26,6 +26,7 @@ pub const DEFAULT_MIN_RUN_LENGTH: usize = 24;
 /// The default `ONLY_INCREASING_RUNS` to use
 pub const DEFAULT_ONLY_INCREASING_RUNS: bool = false;
 
+// TODO: should this be reversed?
 /// The default `POWER_INDEXED_STACK` to use
 pub const DEFAULT_USE_POWER_INDEXED_STACK: bool = false;
 
@@ -60,6 +61,20 @@ impl<
     for PowerSort<N, I, M, B, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS, USE_POWER_INDEXED_STACK>
 {
     const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
+
+    const BASE_NAME: &str = "powersort";
+
+    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
+        vec![
+            ("node-power", N::display()),
+            ("i-sort", super::display_inline::<I>()),
+            ("merging", M::display()),
+            ("min-run-len", MIN_RUN_LENGTH.to_string()),
+            ("only-increasing", ONLY_INCREASING_RUNS.to_string()),
+            ("power-indexed", USE_POWER_INDEXED_STACK.to_string()),
+        ]
+        .into_iter()
+    }
 
     fn sort<T: Ord>(slice: &mut [T]) {
         if slice.len() < 2 {
@@ -176,6 +191,19 @@ impl<
     for MultiwayPowerSort<N, I, M, B, MERGE_K_RUNS, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS>
 {
     const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
+
+    const BASE_NAME: &str = "multiway-powersort";
+
+    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
+        vec![
+            ("node-power", N::display()),
+            ("i-sort", super::display_inline::<I>()),
+            ("merging", M::display()),
+            ("min-run-len", MIN_RUN_LENGTH.to_string()),
+            ("only-increasing", ONLY_INCREASING_RUNS.to_string()),
+        ]
+        .into_iter()
+    }
 
     fn sort<T: Ord>(slice: &mut [T]) {
         if slice.len() < 2 {
@@ -396,6 +424,9 @@ pub mod node_power {
         /// The max `n` up to which this method words correctly
         const MAX_N: usize;
 
+        /// The string representation of this node power method
+        fn display() -> String;
+
         // TODO: accurate?
         /// Calculate the node power of run b?
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize;
@@ -407,6 +438,10 @@ pub mod node_power {
     impl<const K: usize> NodePowerMethod<K> for Trivial {
         // NOTE: Not sure when accuracy fails, but practically it should not matter
         const MAX_N: usize = usize::MAX;
+
+        fn display() -> String {
+            "trivial".to_string()
+        }
 
         #[expect(clippy::absurd_extreme_comparisons)]
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
@@ -435,6 +470,10 @@ pub mod node_power {
     impl<const K: usize> NodePowerMethod<K> for DivisionLoop {
         // FIXME: what is correct here?
         const MAX_N: usize = usize::MAX.isqrt();
+
+        fn display() -> String {
+            "division-loop".to_string()
+        }
 
         // TODO: check if this is correct
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
@@ -467,6 +506,10 @@ pub mod node_power {
 
             1 << (usize::BITS - 1)
         };
+
+        fn display() -> String {
+            "bitwise-loop".to_string()
+        }
 
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
             assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
@@ -510,6 +553,10 @@ pub mod node_power {
 
             1 << (usize::BITS / 2 - 1)
         };
+
+        fn display() -> String {
+            "most-significant-set-bit".to_string()
+        }
 
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
             assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);

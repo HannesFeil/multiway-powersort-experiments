@@ -34,6 +34,18 @@ impl<
 {
     const IS_STABLE: bool = false && I::IS_STABLE;
 
+    const BASE_NAME: &str = "quicksort";
+
+    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
+        vec![
+            ("i-sort", super::display_inline::<I>()),
+            ("i-threshold", INSERTION_THRESHOLD.to_string()),
+            ("ninther-threshold", NINTHER_THRESHOLD.to_string()),
+            ("check-sorted", CHECK_SORTED.to_string()),
+        ]
+        .into_iter()
+    }
+
     fn sort<T: Ord>(slice: &mut [T]) {
         let mut rng = R::produce();
 
