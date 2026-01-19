@@ -14,6 +14,9 @@ pub struct Args {
     /// The sorting algorithm to run
     #[arg()]
     pub algorithm: Algorithm,
+    /// The data type to use for sorting
+    #[arg()]
+    pub data: DataType,
     /// The algorithm variant, use `-v=-1` to print available options
     #[arg(short, long, default_value_t = 0)]
     pub variant: isize,
@@ -23,9 +26,6 @@ pub struct Args {
     /// The size of the slices to sort
     #[arg(long, default_value_t = 1_000_000)]
     pub size: usize,
-    /// The data type to use for sorting
-    #[arg(long, default_value_t = DataType::PermutationU32)]
-    pub data: DataType,
     /// Seed for the rng
     #[arg(long)]
     pub seed: Option<u64>,
@@ -215,11 +215,49 @@ impl AlgorithmVariants {
     }
 }
 
-/// Available data types for sorting
-#[derive(Clone, Copy, clap::ValueEnum)]
-pub enum DataType {
-    UniformU32,
-    PermutationU32,
+macro_rules! declare_data_types {
+    (
+        $(
+            $name:ident : $type:ty
+        ),*
+        $(,)?
+    ) => {
+        /// Available data types for sorting
+        #[derive(Clone, Copy, clap::ValueEnum)]
+        pub enum DataType {
+            $(
+                $name
+            ),*
+        }
+
+        declare_data_types! {
+            @declare_match_macro
+            $($name : $type),* | $
+        }
+    };
+    (@declare_match_macro $($name:ident : $type:ty),* | $dollar:tt) => {
+        /// A hacky macro to dynamically "match" on type (:
+        #[macro_export]
+        #[expect(clippy::crate_in_macro_def)]
+        macro_rules! with_match_type {
+            ($dollar arg:expr; $dollar t:ident => $dollar code:block) => {
+                match $dollar arg {
+                    $(
+                        crate::cli::DataType::$name => {
+                            type $dollar t = $type;
+
+                            $dollar code
+                        }
+                    ),*
+                }
+            };
+        }
+    };
+}
+
+declare_data_types! {
+    PermutationU32: crate::data::PermutationData<u32>,
+    UniformU32: crate::data::UniformData<u32>,
 }
 
 impl std::fmt::Display for DataType {
