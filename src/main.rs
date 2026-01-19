@@ -51,16 +51,17 @@ fn main() {
 
     let sorter = cli::AlgorithmVariants::sorter(algorithm, variant).unwrap();
 
-    let (samples, stats) = match data {
-        cli::DataType::UniformU32 => {
-            perform_experiment::<u32, data::UniformData<u32>>(sorter, runs, size, &mut rng)
-        }
-        cli::DataType::PermutationU32 => {
-            perform_experiment::<u32, data::PermutationData<u32>>(sorter, runs, size, &mut rng)
+    let (samples, stats);
+
+    with_match_type!{
+        data;
+        T => {
+            (samples, stats) =
+                perform_experiment::<_, T>(sorter, runs, size, &mut rng);
         }
     };
 
-    println!("Stats: {stats:?}");
+    println!("Stats: {stats:?}, samples: {s}", s = samples.len());
 }
 
 /// Perform a time sampling experiment on the given sorting algorithm
