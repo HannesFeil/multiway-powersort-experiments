@@ -1,6 +1,8 @@
 use clap::Parser as _;
 use rand::SeedableRng as _;
 
+use crate::data::CountComparisons;
+
 mod algorithms;
 mod cli;
 mod data;
@@ -57,8 +59,13 @@ fn main() {
     with_match_type! {
         data;
         T, D => {
+            #[cfg(not(feature = "counters"))]
+            type DataType = T;
+            #[cfg(feature = "counters")]
+            type DataType = CountComparisons<T>;
+
             (samples, stats) =
-                perform_experiment::<T, D>(sorter, runs, size, &mut rng);
+                perform_experiment::<DataType, D>(sorter, runs, size, &mut rng);
         }
     };
 
