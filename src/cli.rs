@@ -218,7 +218,7 @@ impl AlgorithmVariants {
 macro_rules! declare_data_types {
     (
         $(
-            $name:ident : $type:ty
+            $name:ident : $type:ty, $d_type:ty
         ),*
         $(,)?
     ) => {
@@ -232,19 +232,20 @@ macro_rules! declare_data_types {
 
         declare_data_types! {
             @declare_match_macro
-            $($name : $type),* | $
+            $($name : $type, $d_type),* | $
         }
     };
-    (@declare_match_macro $($name:ident : $type:ty),* | $dollar:tt) => {
+    (@declare_match_macro $($name:ident : $type:ty, $d_type:ty),* | $dollar:tt) => {
         /// A hacky macro to dynamically "match" on type (:
         #[macro_export]
         #[expect(clippy::crate_in_macro_def)]
         macro_rules! with_match_type {
-            ($dollar arg:expr; $dollar t:ident => $dollar code:block) => {
+            ($dollar arg:expr; $dollar t:ident, $dollar d:ident => $dollar code:block) => {
                 match $dollar arg {
                     $(
                         crate::cli::DataType::$name => {
                             type $dollar t = $type;
+                            type $dollar d = $d_type;
 
                             $dollar code
                         }
@@ -256,8 +257,9 @@ macro_rules! declare_data_types {
 }
 
 declare_data_types! {
-    PermutationU32: crate::data::PermutationData<u32>,
-    UniformU32: crate::data::UniformData<u32>,
+    PermutationU32: u32, crate::data::PermutationData,
+    UniformU32: u32, crate::data::UniformData,
+    RandomRunsSqrtU32: u32, crate::data::RandomRunsSqrtData,
 }
 
 impl std::fmt::Display for DataType {

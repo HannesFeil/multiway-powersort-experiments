@@ -53,11 +53,11 @@ fn main() {
 
     let (samples, stats);
 
-    with_match_type!{
+    with_match_type! {
         data;
-        T => {
+        T, D => {
             (samples, stats) =
-                perform_experiment::<_, T>(sorter, runs, size, &mut rng);
+                perform_experiment::<T, D>(sorter, runs, size, &mut rng);
         }
     };
 
@@ -82,7 +82,7 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
     let bar = indicatif::ProgressBar::new(runs as u64);
 
     for run in 0..=runs {
-        let mut data = D::initialize(size, rng);
+        let mut data = D::default().initialize(size, rng);
 
         let now = std::time::Instant::now();
         sorter(std::hint::black_box(&mut data));
