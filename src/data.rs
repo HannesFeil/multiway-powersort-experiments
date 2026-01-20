@@ -94,6 +94,58 @@ impl<C: BlobComparisonMethod<N>, const N: usize> Ord for Blob<C, N> {
     }
 }
 
+static COMPARISON_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+pub struct CountComparisons<T>(T);
+
+impl<T> CountComparisons<T> {
+    fn increase_counter(amount: u64) {
+        COMPARISON_COUNTER.fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+impl<T: PartialEq> PartialEq for CountComparisons<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Self::increase_counter(1);
+
+        self.0 == other.0
+    }
+}
+
+impl<T: Eq> Eq for CountComparisons<T> {}
+
+impl<T: PartialOrd> PartialOrd for CountComparisons<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Self::increase_counter(1);
+
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T: Ord> Ord for CountComparisons<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        Self::increase_counter(1);
+
+        self.0.cmp(&other.0)
+    }
+}
+
+impl<T: TryFrom<usize>> TryFrom<usize> for CountComparisons<T> {
+    type Error = T::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        T::try_from(value).map(Self)
+    }
+}
+
+impl<T: Extremes> Extremes for CountComparisons<T> {
+    const MIN: Self = Self(T::MIN);
+
+    const MAX: Self = Self(T::MAX);
+}
+
 trait Extremes {
     const MIN: Self;
     const MAX: Self;
