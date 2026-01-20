@@ -1,6 +1,6 @@
 //! Contains various structs used to measure differences and memory effects when being sorted
 
-use rand::distr::Distribution as _;
+use rand::{distr::Distribution as _, seq::SliceRandom};
 
 pub trait BlobComparisonMethod<const N: usize> {
     fn compare(a: &[u32; N], b: &[u32; N]) -> std::cmp::Ordering;
@@ -94,18 +94,86 @@ impl<C: BlobComparisonMethod<N>, const N: usize> Ord for Blob<C, N> {
     }
 }
 
-/// A uniform data distribution set
-#[derive(Debug)]
-pub struct UniformData<T>(std::marker::PhantomData<T>);
+trait Extremes {
+    const MIN: Self;
+    const MAX: Self;
+}
+
+/// A uniform data distribution
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UniformData;
 
 /// A random permutation data distribution
-#[derive(Debug)]
-pub struct PermutationData<T>(std::marker::PhantomData<T>);
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PermutationData;
+
+/// A permutation with random runs
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RandomRunsData(usize);
+
+/// A permutation with random runs
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RandomRunsSqrtData;
 
 /// A trait for generalizing sorting data creation
-pub trait Data<T: Sized + Ord + std::fmt::Debug> {
+pub trait Data<T: Sized + Ord + std::fmt::Debug>: Default {
     /// Initialize a vector of the given size
-    fn initialize(size: usize, rng: &mut impl rand::Rng) -> Vec<T>;
+    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T>;
+}
+
+impl<T> Data<T> for UniformData
+where
+    T: Ord + Extremes + rand::distr::uniform::SampleUniform + std::fmt::Debug,
+{
+    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+        rand::distr::Uniform::new(T::MIN, T::MAX)
+            .unwrap()
+            .sample_iter(rng)
+            .take(size)
+            .collect()
+    }
+}
+
+impl<T> Data<T> for PermutationData
+where
+    T: Ord + TryFrom<usize> + std::fmt::Debug,
+    <T as TryFrom<usize>>::Error: std::fmt::Debug,
+{
+    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+        let mut values: Vec<_> = (0..size).map(|i| T::try_from(i).unwrap()).collect();
+        values.shuffle(rng);
+        values
+    }
+}
+
+impl<T> Data<T> for RandomRunsData
+where
+    T: Ord + TryFrom<usize> + std::fmt::Debug,
+    <T as TryFrom<usize>>::Error: std::fmt::Debug,
+{
+    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+        let mut values = PermutationData.initialize(size, rng);
+        let geometric = rand_distr::Geometric::new(1.0 / self.0 as f64).unwrap();
+
+        let mut start = 0;
+        while start < values.len() {
+            let len = std::cmp::min(geometric.sample(rng) as usize, values.len() - start);
+            values[start..start + len].sort();
+            start += len;
+        }
+
+        values
+    }
+}
+
+impl<T> Data<T> for RandomRunsSqrtData
+where
+    T: Ord + TryFrom<usize> + std::fmt::Debug,
+    <T as TryFrom<usize>>::Error: std::fmt::Debug,
+{
+    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+        RandomRunsData(size.isqrt()).initialize(size, rng)
+    }
 }
 
 /// Implement distribution data for the given integer types
@@ -116,25 +184,9 @@ macro_rules! impl_for_integers {
         )*
     };
     (@single $type:ty) => {
-        impl Data<$type> for UniformData<$type> {
-            fn initialize(size: usize, rng: &mut impl rand::Rng) -> Vec<$type> {
-                rand::distr::Uniform::new(<$type>::MIN, <$type>::MAX)
-                    .unwrap()
-                    .sample_iter(rng)
-                    .take(size)
-                    .collect()
-            }
-        }
-
-        impl Data<$type> for PermutationData<$type> {
-            fn initialize(size: usize, rng: &mut impl rand::Rng) -> Vec<$type> {
-                use rand::seq::SliceRandom as _;
-
-                let mut result: Vec<$type> = (0..size as $type).collect();
-                result.shuffle(rng);
-
-                result
-            }
+        impl Extremes for $type {
+            const MIN: Self = Self::MIN;
+            const MAX: Self = Self::MAX;
         }
     }
 }
