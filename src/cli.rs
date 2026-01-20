@@ -21,14 +21,16 @@ pub struct Args {
     #[arg(short, long, default_value_t = 0)]
     pub variant: isize,
     /// The number of runs to do
-    #[arg(long, default_value_t = 1_000)]
+    #[arg(short, long, default_value_t = 1_000)]
     pub runs: usize,
     /// The size of the slices to sort
-    #[arg(long, default_value_t = 1_000_000)]
+    #[arg(short, long, default_value_t = 1_000_000)]
     pub size: usize,
     /// Seed for the rng
     #[arg(long)]
     pub seed: Option<u64>,
+    /// The output file to write the samples to
+    pub output: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]

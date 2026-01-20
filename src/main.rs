@@ -19,6 +19,7 @@ fn main() {
         size,
         data,
         seed,
+        output,
     } = cli::Args::parse();
 
     let Some(variant) = cli::AlgorithmVariants::validate(algorithm, variant) else {
@@ -61,7 +62,15 @@ fn main() {
         }
     };
 
-    println!("Stats: {stats:?}, samples: {s}", s = samples.len());
+    println!("Stats: {stats:?}");
+
+    if let Some(output) = output {
+        let data: Vec<String> = samples
+            .into_iter()
+            .map(|duration| duration.as_micros().to_string())
+            .collect();
+        std::fs::write(&output, data.join("\n")).unwrap();
+    }
 }
 
 /// Perform a time sampling experiment on the given sorting algorithm
