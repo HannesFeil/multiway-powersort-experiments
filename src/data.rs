@@ -104,6 +104,10 @@ impl<T> CountComparisons<T> {
     fn increase_counter(amount: u64) {
         COMPARISON_COUNTER.fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
     }
+
+    pub fn read_and_reset_counter() -> u64 {
+        COMPARISON_COUNTER.swap(0, std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 impl<T: PartialEq> PartialEq for CountComparisons<T> {
@@ -137,6 +141,42 @@ impl<T: TryFrom<usize>> TryFrom<usize> for CountComparisons<T> {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         T::try_from(value).map(Self)
+    }
+}
+
+impl<T: rand::distr::uniform::SampleUniform> rand::distr::uniform::SampleUniform
+    for CountComparisons<T>
+{
+    type Sampler = CountComparisonsSampler<T::Sampler>;
+}
+
+pub struct CountComparisonsSampler<T>(T);
+
+impl<T: rand::distr::uniform::UniformSampler> rand::distr::uniform::UniformSampler
+    for CountComparisonsSampler<T>
+where
+    T::X: rand::distr::uniform::SampleUniform,
+{
+    type X = CountComparisons<T::X>;
+
+    fn new<B1, B2>(low: B1, high: B2) -> Result<Self, rand::distr::uniform::Error>
+    where
+        B1: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
+        B2: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
+    {
+        T::new(&low.borrow().0, &high.borrow().0).map(Self)
+    }
+
+    fn new_inclusive<B1, B2>(low: B1, high: B2) -> Result<Self, rand::distr::uniform::Error>
+    where
+        B1: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
+        B2: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
+    {
+        T::new_inclusive(&low.borrow().0, &high.borrow().0).map(Self)
+    }
+
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Self::X {
+        CountComparisons(self.0.sample(rng))
     }
 }
 
