@@ -48,6 +48,7 @@ impl<const N: usize> BlobComparisonMethod<N> for CompareHash {
     }
 }
 
+#[repr(transparent)]
 #[derive(Debug, Clone)]
 pub struct Blob<C: BlobComparisonMethod<N>, const N: usize>([u32; N], std::marker::PhantomData<C>);
 
@@ -97,6 +98,7 @@ impl<C: BlobComparisonMethod<N>, const N: usize> Ord for Blob<C, N> {
 static COMPARISON_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[allow(dead_code)]
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct CountComparisons<T>(T);
 
