@@ -85,6 +85,12 @@ impl<const K: usize> MultiMergingMethod<K> for MergeRunsIndices4 {
         run_lengths: &[usize],
         buffer: &mut [std::mem::MaybeUninit<T>],
     ) {
+        #[cfg(feature = "counters")]
+        {
+            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
+            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+        }
+
         let run_slice = &mut &*slice;
         let mut run_slices: [&[T]; 4] = [&[]; 4];
         let mut index = 0;
