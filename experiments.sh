@@ -1,5 +1,5 @@
 #! /bin/sh
-set -euo pipefail
+set -eu
 
 cargo build --release
 SEED=439569436534
