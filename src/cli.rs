@@ -185,19 +185,52 @@ declare_variants! {
             >,
         ],
         Algorithm::Peeksort => [
-            peeksort::PeekSort
+            peeksort::PeekSort,
         ],
         Algorithm::Mergesort => [
-            mergesort::TopDownMergeSort
+            mergesort::TopDownMergeSort,
+            mergesort::TopDownMergeSort<
+                mergesort::DefaultInsertionSort,
+                mergesort::DefaultMergingMethod,
+                mergesort::DefaultBufGuardFactory,
+                { mergesort::DEFAULT_INSERTION_THRESHOLD },
+                false
+            >,
+            mergesort::TopDownMergeSort<
+                mergesort::DefaultInsertionSort,
+                mergesort::DefaultMergingMethod,
+                mergesort::DefaultBufGuardFactory,
+                1,
+                true
+            >,
+            mergesort::TopDownMergeSort<
+                mergesort::DefaultInsertionSort,
+                mergesort::DefaultMergingMethod,
+                mergesort::DefaultBufGuardFactory,
+                1,
+                false
+            >,
         ],
         Algorithm::Timsort => [
-            timsort::TimSort
+            timsort::TimSort,
+            timsort::TimSort<
+                timsort::DefaultInsertionSort,
+                merging::two_way::CopyBoth,
+                timsort::DefaultBufGuardFactory,
+                { timsort::DEFAULT_MIN_MERGE },
+            >,
+            timsort::TimSort<
+                insertionsort::InsertionSort<true>,
+                merging::two_way::CopyBoth,
+                timsort::DefaultBufGuardFactory,
+                { timsort::DEFAULT_MIN_MERGE },
+            >,
         ],
         Algorithm::Powersort => [
-            powersort::PowerSort
+            powersort::PowerSort,
         ],
         Algorithm::MultiwayPowersort => [
-            powersort::MultiwayPowerSort
+            powersort::MultiwayPowerSort,
         ],
     }
 }
@@ -243,25 +276,36 @@ macro_rules! declare_data_types {
         #[expect(clippy::crate_in_macro_def)]
         macro_rules! with_match_type {
             ($dollar arg:expr; $dollar t:ident, $dollar d:ident => $dollar code:block) => {
-                match $dollar arg {
-                    $(
-                        crate::cli::DataType::$name => {
-                            type $dollar t = $type;
-                            type $dollar d = $d_type;
+                {
+                    use crate::cli::*;
+                    match $dollar arg {
+                        $(
+                            crate::cli::DataType::$name => {
+                                type $dollar t = $type;
+                                type $dollar d = $d_type;
 
-                            $dollar code
-                        }
-                    ),*
+                                $dollar code
+                            }
+                        ),*
+                    }
                 }
             };
         }
     };
 }
 
+pub type Blob2U64CmpFirst = crate::data::Blob<u64, crate::data::CompareFirstEntry, 2>;
+
 declare_data_types! {
+    // u32
     PermutationU32: u32, crate::data::PermutationData,
     UniformU32: u32, crate::data::UniformData,
     RandomRunsSqrtU32: u32, crate::data::RandomRunsSqrtData,
+
+    // blob2u64
+    PermutationLP: Blob2U64CmpFirst, crate::data::PermutationData,
+    UniformLP: Blob2U64CmpFirst, crate::data::UniformData,
+    RandomRunsSqrtLP: Blob2U64CmpFirst, crate::data::RandomRunsSqrtData,
 }
 
 impl std::fmt::Display for DataType {
