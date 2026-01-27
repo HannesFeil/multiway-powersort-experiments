@@ -2,15 +2,15 @@
 
 use rand::{distr::Distribution as _, seq::SliceRandom};
 
-pub trait BlobComparisonMethod<const N: usize> {
-    fn compare(a: &[u32; N], b: &[u32; N]) -> std::cmp::Ordering;
+pub trait BlobComparisonMethod<T: Ord, const N: usize>: std::fmt::Debug {
+    fn compare(a: &[T; N], b: &[T; N]) -> std::cmp::Ordering;
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct CompareFirstEntry;
 
-impl<const N: usize> BlobComparisonMethod<N> for CompareFirstEntry {
-    fn compare(a: &[u32; N], b: &[u32; N]) -> std::cmp::Ordering {
+impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareFirstEntry {
+    fn compare(a: &[T; N], b: &[T; N]) -> std::cmp::Ordering {
         a.first().cmp(&b.first())
     }
 }
@@ -18,8 +18,8 @@ impl<const N: usize> BlobComparisonMethod<N> for CompareFirstEntry {
 #[derive(Debug, Clone, Copy)]
 pub struct CompareLexicographically;
 
-impl<const N: usize> BlobComparisonMethod<N> for CompareLexicographically {
-    fn compare(a: &[u32; N], b: &[u32; N]) -> std::cmp::Ordering {
+impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareLexicographically {
+    fn compare(a: &[T; N], b: &[T; N]) -> std::cmp::Ordering {
         for (a, b) in a.iter().zip(b.iter()) {
             match a.cmp(b) {
                 std::cmp::Ordering::Equal => continue,
@@ -34,7 +34,7 @@ impl<const N: usize> BlobComparisonMethod<N> for CompareLexicographically {
 #[derive(Debug, Clone, Copy)]
 pub struct CompareHash;
 
-impl<const N: usize> BlobComparisonMethod<N> for CompareHash {
+impl<const N: usize> BlobComparisonMethod<u32, N> for CompareHash {
     fn compare(a: &[u32; N], b: &[u32; N]) -> std::cmp::Ordering {
         fn hash<const N: usize>(blob: &[u32; N]) -> u32 {
             const P: u32 = 2147483659;
@@ -50,9 +50,14 @@ impl<const N: usize> BlobComparisonMethod<N> for CompareHash {
 
 #[repr(transparent)]
 #[derive(Debug, Clone)]
-pub struct Blob<C: BlobComparisonMethod<N>, const N: usize>([u32; N], std::marker::PhantomData<C>);
+pub struct Blob<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize>(
+    [T; N],
+    std::marker::PhantomData<C>,
+);
 
-impl<C: BlobComparisonMethod<N>, const N: usize> From<u32> for Blob<C, N> {
+impl<T: Ord + From<u32>, C: BlobComparisonMethod<T, N>, const N: usize> From<u32>
+    for Blob<T, C, N>
+{
     fn from(value: u32) -> Self {
         const PRIMES: [u32; 64] = [
             1073741827, 1073741831, 1073741833, 1073741839, 1073741843, 1073741857, 1073741891,
@@ -69,27 +74,27 @@ impl<C: BlobComparisonMethod<N>, const N: usize> From<u32> for Blob<C, N> {
         assert!(N <= 64, "Cannot create blobs with size greater than 64");
 
         Blob(
-            std::array::from_fn(|i| value % PRIMES[i]),
+            std::array::from_fn(|i| (value % PRIMES[i]).into()),
             std::marker::PhantomData,
         )
     }
 }
 
-impl<C: BlobComparisonMethod<N>, const N: usize> PartialEq for Blob<C, N> {
+impl<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize> PartialEq for Blob<T, C, N> {
     fn eq(&self, other: &Self) -> bool {
         C::compare(&self.0, &other.0).is_eq()
     }
 }
 
-impl<C: BlobComparisonMethod<N>, const N: usize> Eq for Blob<C, N> {}
+impl<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize> Eq for Blob<T, C, N> {}
 
-impl<C: BlobComparisonMethod<N>, const N: usize> PartialOrd for Blob<C, N> {
+impl<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize> PartialOrd for Blob<T, C, N> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<C: BlobComparisonMethod<N>, const N: usize> Ord for Blob<C, N> {
+impl<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize> Ord for Blob<T, C, N> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         C::compare(&self.0, &other.0)
     }
@@ -289,6 +294,21 @@ where
 {
     fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
         RandomRunsData(size.isqrt()).initialize(size, rng)
+    }
+}
+
+impl<
+    D: Data<u32>,
+    T: Ord + std::fmt::Debug + From<u32>,
+    C: BlobComparisonMethod<T, N>,
+    const N: usize,
+> Data<Blob<T, C, N>> for D
+{
+    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<Blob<T, C, N>> {
+        <Self as Data<u32>>::initialize(self, size, rng)
+            .into_iter()
+            .map(|i| i.into())
+            .collect()
     }
 }
 
