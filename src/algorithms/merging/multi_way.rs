@@ -72,8 +72,7 @@ impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
 #[derive(Debug, Clone, Copy)]
 pub struct MergeRunsIndices4;
 
-// FIX: this K is incorrect
-impl<const K: usize> MultiMergingMethod<K> for MergeRunsIndices4 {
+impl MultiMergingMethod<4> for MergeRunsIndices4 {
     const IS_STABLE: bool = true;
 
     fn display() -> String {

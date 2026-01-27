@@ -193,7 +193,7 @@ declare_variants! {
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
-                { mergesort::DEFAULT_INSERTION_THRESHOLD },
+                1,
                 false
             >,
             mergesort::TopDownMergeSort<
@@ -203,12 +203,12 @@ declare_variants! {
                 1,
                 true
             >,
-            mergesort::TopDownMergeSort<
+            mergesort::BottomUpMergeSort<
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
-                1,
-                false
+                { mergesort::DEFAULT_INSERTION_THRESHOLD },
+                true,
             >,
         ],
         Algorithm::Timsort => [
@@ -220,7 +220,7 @@ declare_variants! {
                 { timsort::DEFAULT_MIN_MERGE },
             >,
             timsort::TimSort<
-                insertionsort::InsertionSort<true>,
+                insertionsort::InsertionSort<false>,
                 merging::two_way::CopyBoth,
                 timsort::DefaultBufGuardFactory,
                 { timsort::DEFAULT_MIN_MERGE },
