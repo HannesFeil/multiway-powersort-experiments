@@ -95,20 +95,42 @@ impl<C: BlobComparisonMethod<N>, const N: usize> Ord for Blob<C, N> {
     }
 }
 
-static COMPARISON_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct GlobalCounter(std::sync::atomic::AtomicU64);
+
+// TODO: Is the ordering correct?
+#[allow(dead_code)]
+impl GlobalCounter {
+    pub const fn new() -> Self {
+        Self(std::sync::atomic::AtomicU64::new(0))
+    }
+
+    pub fn increase(&self, amount: u64) {
+        self.0
+            .fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn read_and_reset(&self) -> u64 {
+        self.0.swap(0, std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+static COMPARISON_COUNTER: GlobalCounter = GlobalCounter::new();
 
 #[allow(dead_code)]
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct CountComparisons<T>(T);
 
+#[allow(dead_code)]
 impl<T> CountComparisons<T> {
     fn increase_counter(amount: u64) {
-        COMPARISON_COUNTER.fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
+        COMPARISON_COUNTER.increase(amount);
     }
 
     pub fn read_and_reset_counter() -> u64 {
-        COMPARISON_COUNTER.swap(0, std::sync::atomic::Ordering::Relaxed)
+        COMPARISON_COUNTER.read_and_reset()
     }
 }
 

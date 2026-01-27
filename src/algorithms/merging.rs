@@ -117,8 +117,14 @@ pub trait BufGuard<T> {
     fn as_uninit_slice_mut(&mut self) -> &mut [std::mem::MaybeUninit<T>];
 }
 
+#[allow(dead_code)]
+pub static ALLOC_COUNTER: crate::data::GlobalCounter = crate::data::GlobalCounter::new();
+
 impl<T> BufGuard<T> for Vec<T> {
     fn with_capacity(capacity: usize) -> Self {
+        #[cfg(feature = "counters")]
+        ALLOC_COUNTER.increase(capacity as u64);
+
         Vec::with_capacity(capacity)
     }
 
@@ -126,6 +132,11 @@ impl<T> BufGuard<T> for Vec<T> {
         self.spare_capacity_mut()
     }
 }
+
+#[allow(dead_code)]
+pub static MERGE_SLICE_COUNTER: crate::data::GlobalCounter = crate::data::GlobalCounter::new();
+#[allow(dead_code)]
+pub static MERGE_BUFFER_COUNTER: crate::data::GlobalCounter = crate::data::GlobalCounter::new();
 
 mod slice {
     /// Copies the first `count` elements from `src` to `dst` and returns the slices with the

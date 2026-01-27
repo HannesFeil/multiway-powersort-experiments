@@ -1,8 +1,6 @@
 use clap::Parser as _;
 use rand::SeedableRng as _;
 
-use crate::data::CountComparisons;
-
 mod algorithms;
 mod cli;
 mod data;
@@ -52,29 +50,40 @@ fn main() {
         }
     };
 
-    let sorter = cli::AlgorithmVariants::sorter(algorithm, variant).unwrap();
-
     let (samples, stats);
 
     with_match_type! {
         data;
         T, D => {
+            let sorter = cli::AlgorithmVariants::sorter(algorithm, variant).unwrap();
             #[cfg(not(feature = "counters"))]
-            type DataType = T;
+            {
+                (samples, stats) =
+                    perform_time_experiment::<T, D>(sorter, runs, size, &mut rng);
+            }
             #[cfg(feature = "counters")]
-            type DataType = CountComparisons<T>;
-
-            (samples, stats) =
-                perform_experiment::<DataType, D>(sorter, runs, size, &mut rng);
+            {
+                (samples, stats) = perform_counters_experiment::<T, D>(sorter, runs, size, &mut rng);
+            };
         }
     };
 
-    println!("Stats: {stats:?}");
+    println!("Stats: {stats:#?}");
 
     if let Some(output) = output {
+        #[cfg(not(feature = "counters"))]
         let data: Vec<String> = samples
             .into_iter()
             .map(|duration| duration.as_micros().to_string())
+            .collect();
+        #[cfg(feature = "counters")]
+        let data: Vec<String> = samples
+            .into_iter()
+            .map(
+                |[comparisons, alloc, slice_merge_cost, buffer_merge_cost]| {
+                    format!("{comparisons},{alloc},{slice_merge_cost},{buffer_merge_cost}")
+                },
+            )
             .collect();
         std::fs::write(&output, data.join("\n")).unwrap();
     }
@@ -85,16 +94,93 @@ fn main() {
 /// - runs: The number of samples to measure
 /// - size: The size of the slices to sort
 /// - rng: The rng used for sampling the data
-fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
+#[allow(dead_code)]
+fn perform_time_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
     sorter: fn(&mut [T]),
     runs: usize,
     size: usize,
     rng: &mut impl rand::Rng,
 ) -> (Vec<std::time::Duration>, rolling_stats::Stats<f64>) {
-    let mut samples = Vec::with_capacity(runs);
+    let samples = Vec::with_capacity(runs);
+    let stats: rolling_stats::Stats<f64> = rolling_stats::Stats::new();
 
-    let mut stats: rolling_stats::Stats<f64> = rolling_stats::Stats::new();
+    perform_experiment::<_, _, T, D>(
+        (samples, stats),
+        |ignore, (samples, stats), elapsed| {
+            if !ignore {
+                samples.push(elapsed);
+                stats.update(elapsed.as_micros() as f64);
+            }
+        },
+        sorter,
+        runs,
+        size,
+        rng,
+    )
+}
 
+/// Perform a time sampling experiment on the given sorting algorithm
+///
+/// - runs: The number of samples to measure
+/// - size: The size of the slices to sort
+/// - rng: The rng used for sampling the data
+#[allow(dead_code)]
+fn perform_counters_experiment<
+    T: Ord + std::fmt::Debug,
+    D: data::Data<crate::data::CountComparisons<T>>,
+>(
+    sorter: fn(&mut [crate::data::CountComparisons<T>]),
+    runs: usize,
+    size: usize,
+    rng: &mut impl rand::Rng,
+) -> (Vec<[u64; 4]>, [rolling_stats::Stats<f64>; 4]) {
+    let samples = Vec::with_capacity(runs);
+    let stats = std::array::from_fn::<_, 4, _>(|_| rolling_stats::Stats::new());
+
+    perform_experiment::<_, _, crate::data::CountComparisons<T>, D>(
+        (samples, stats),
+        |ignore, (samples, stats), _| {
+            let comparisons = crate::data::CountComparisons::<T>::read_and_reset_counter();
+            let alloc = crate::algorithms::merging::ALLOC_COUNTER.read_and_reset();
+            let merge_slice_cost = crate::algorithms::merging::MERGE_SLICE_COUNTER.read_and_reset();
+            let merge_buffer_cost =
+                crate::algorithms::merging::MERGE_BUFFER_COUNTER.read_and_reset();
+
+            let sample = [comparisons, alloc, merge_slice_cost, merge_buffer_cost];
+
+            if !ignore {
+                samples.push(sample);
+                for (stat, value) in stats.iter_mut().zip(sample.iter()) {
+                    // TODO: is this cast good?
+                    stat.update(*value as f64);
+                }
+            }
+        },
+        sorter,
+        runs,
+        size,
+        rng,
+    )
+}
+
+/// Perform a time sampling experiment on the given sorting algorithm
+///
+/// - runs: The number of samples to measure
+/// - size: The size of the slices to sort
+/// - rng: The rng used for sampling the data
+fn perform_experiment<
+    S,
+    F: FnMut(bool, &mut S, std::time::Duration),
+    T: Ord + std::fmt::Debug,
+    D: data::Data<T>,
+>(
+    mut initial: S,
+    mut sampler: F,
+    sorter: fn(&mut [T]),
+    runs: usize,
+    size: usize,
+    rng: &mut impl rand::Rng,
+) -> S {
     let bar = indicatif::ProgressBar::new(runs as u64);
 
     for run in 0..=runs {
@@ -109,15 +195,15 @@ fn perform_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
             "{data:?} is not sorted after algorithm run"
         );
 
-        // NOTE: Skip first sample (behavior taken from original codebase)
-        if run != 0 {
-            samples.push(elapsed);
-            // TODO: is this cast fine?
-            stats.update(elapsed.as_millis() as f64);
+        let ignore = run == 0;
 
+        sampler(ignore, &mut initial, elapsed);
+
+        // NOTE: Skip first sample (behavior taken from original codebase)
+        if !ignore {
             bar.inc(1);
         }
     }
 
-    (samples, stats)
+    initial
 }

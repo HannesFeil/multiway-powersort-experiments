@@ -36,6 +36,12 @@ impl MergingMethod for CopyBoth {
             return;
         }
 
+        #[cfg(feature = "counters")]
+        {
+            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
+            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+        }
+
         assert!(
             buffer.len() >= slice.len(),
             "Buffer needs to have at least the size of slice"
@@ -102,6 +108,13 @@ impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
     fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]) {
         if slice.len() < 2 || run_length == 0 {
             return;
+        }
+
+        // TODO: improve this?
+        #[cfg(feature = "counters")]
+        {
+            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
+            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
         }
 
         let start = Self::gallop::<T, false>(&slice[run_length], &slice[..run_length], 0);
