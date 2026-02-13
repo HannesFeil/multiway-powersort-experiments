@@ -44,12 +44,12 @@ run_sorts 1001   1000000 random-runs-sqrt-u32   times-runs-1m-int >> ${OUTPUT}/t
 run_sorts  101  10000000 random-runs-sqrt-u32  times-runs-10m-int >> ${OUTPUT}/times-runs-int.out
 run_sorts  101 100000000 random-runs-sqrt-u32 times-runs-100m-int >> ${OUTPUT}/times-runs-int.out
 
-echo "Experiment 2a: 10^7 ints distribution, random runs"
+# echo "Experiment 2a: 10^7 ints distribution, random runs"
 
 for runs in 3 30 300 3000 30000 300000 3000000
 do
   # FIXME: ?
-  run_sorts 3  10000000 runs$runs '*' ${SEED} times-runs$runs-10m-int-dist    >> ${OUTPUT}/times-runs$runs-int.out
+  # run_sorts 3  10000000 runs$runs '*' ${SEED} times-runs$runs-10m-int-dist    >> ${OUTPUT}/times-runs$runs-int.out
 done
 
 echo "Experiment 2: 10^7 ints distribution, random runs"

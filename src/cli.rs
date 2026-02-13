@@ -299,12 +299,10 @@ pub type Blob2U64CmpFirst = crate::data::Blob<u64, crate::data::CompareFirstEntr
 declare_data_types! {
     // u32
     PermutationU32: u32, crate::data::PermutationData,
-    UniformU32: u32, crate::data::UniformData,
     RandomRunsSqrtU32: u32, crate::data::RandomRunsSqrtData,
 
     // blob2u64
     PermutationLP: Blob2U64CmpFirst, crate::data::PermutationData,
-    UniformLP: Blob2U64CmpFirst, crate::data::UniformData,
     RandomRunsSqrtLP: Blob2U64CmpFirst, crate::data::RandomRunsSqrtData,
 }
 

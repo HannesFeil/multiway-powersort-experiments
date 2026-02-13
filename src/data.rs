@@ -55,28 +55,47 @@ pub struct Blob<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize>(
     std::marker::PhantomData<C>,
 );
 
+const BLOB_PRIMES: [u32; 64] = [
+    1073741827, 1073741831, 1073741833, 1073741839, 1073741843, 1073741857, 1073741891, 1073741909,
+    1073741939, 1073741953, 1073741969, 1073741971, 1073741987, 1073741993, 1073742037, 1073742053,
+    1073742073, 1073742077, 1073742091, 1073742113, 1073742169, 1073742203, 1073742209, 1073742223,
+    1073742233, 1073742259, 1073742277, 1073742289, 1073742343, 1073742353, 1073742361, 1073742391,
+    1073742403, 1073742463, 1073742493, 1073742517, 1073742583, 1073742623, 1073742653, 1073742667,
+    1073742671, 1073742673, 1073742707, 1073742713, 1073742721, 1073742731, 1073742767, 1073742773,
+    1073742811, 1073742851, 1073742853, 1073742881, 1073742889, 1073742913, 1073742931, 1073742937,
+    1073742959, 1073742983, 1073743007, 1073743037, 1073743049, 1073743051, 1073743079, 1073743091,
+];
+
 impl<T: Ord + From<u32>, C: BlobComparisonMethod<T, N>, const N: usize> From<u32>
     for Blob<T, C, N>
 {
     fn from(value: u32) -> Self {
-        const PRIMES: [u32; 64] = [
-            1073741827, 1073741831, 1073741833, 1073741839, 1073741843, 1073741857, 1073741891,
-            1073741909, 1073741939, 1073741953, 1073741969, 1073741971, 1073741987, 1073741993,
-            1073742037, 1073742053, 1073742073, 1073742077, 1073742091, 1073742113, 1073742169,
-            1073742203, 1073742209, 1073742223, 1073742233, 1073742259, 1073742277, 1073742289,
-            1073742343, 1073742353, 1073742361, 1073742391, 1073742403, 1073742463, 1073742493,
-            1073742517, 1073742583, 1073742623, 1073742653, 1073742667, 1073742671, 1073742673,
-            1073742707, 1073742713, 1073742721, 1073742731, 1073742767, 1073742773, 1073742811,
-            1073742851, 1073742853, 1073742881, 1073742889, 1073742913, 1073742931, 1073742937,
-            1073742959, 1073742983, 1073743007, 1073743037, 1073743049, 1073743051, 1073743079,
-            1073743091,
-        ];
         assert!(N <= 64, "Cannot create blobs with size greater than 64");
 
         Blob(
-            std::array::from_fn(|i| (value % PRIMES[i]).into()),
+            std::array::from_fn(|i| (value % BLOB_PRIMES[i]).into()),
             std::marker::PhantomData,
         )
+    }
+}
+
+impl<T: Ord + TryFrom<usize>, C: BlobComparisonMethod<T, N>, const N: usize> TryFrom<usize>
+    for Blob<T, C, N>
+{
+    type Error = T::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        assert!(N <= 64, "Cannot create blobs with size greater than 64");
+
+        let mut elements: Vec<T> = vec![];
+        for i in 0..N {
+            elements.push((value % BLOB_PRIMES[i] as usize).try_into()?)
+        }
+
+        Ok(Blob(
+            std::array::from_fn(|_| elements.remove(0)),
+            std::marker::PhantomData,
+        ))
     }
 }
 
@@ -173,56 +192,7 @@ impl<T: TryFrom<usize>> TryFrom<usize> for CountComparisons<T> {
     }
 }
 
-impl<T: rand::distr::uniform::SampleUniform> rand::distr::uniform::SampleUniform
-    for CountComparisons<T>
-{
-    type Sampler = CountComparisonsSampler<T::Sampler>;
-}
-
 pub struct CountComparisonsSampler<T>(T);
-
-impl<T: rand::distr::uniform::UniformSampler> rand::distr::uniform::UniformSampler
-    for CountComparisonsSampler<T>
-where
-    T::X: rand::distr::uniform::SampleUniform,
-{
-    type X = CountComparisons<T::X>;
-
-    fn new<B1, B2>(low: B1, high: B2) -> Result<Self, rand::distr::uniform::Error>
-    where
-        B1: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
-        B2: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
-    {
-        T::new(&low.borrow().0, &high.borrow().0).map(Self)
-    }
-
-    fn new_inclusive<B1, B2>(low: B1, high: B2) -> Result<Self, rand::distr::uniform::Error>
-    where
-        B1: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
-        B2: rand::distr::uniform::SampleBorrow<Self::X> + Sized,
-    {
-        T::new_inclusive(&low.borrow().0, &high.borrow().0).map(Self)
-    }
-
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Self::X {
-        CountComparisons(self.0.sample(rng))
-    }
-}
-
-impl<T: Extremes> Extremes for CountComparisons<T> {
-    const MIN: Self = Self(T::MIN);
-
-    const MAX: Self = Self(T::MAX);
-}
-
-trait Extremes {
-    const MIN: Self;
-    const MAX: Self;
-}
-
-/// A uniform data distribution
-#[derive(Debug, Clone, Copy, Default)]
-pub struct UniformData;
 
 /// A random permutation data distribution
 #[derive(Debug, Clone, Copy, Default)]
@@ -237,22 +207,9 @@ pub struct RandomRunsData(usize);
 pub struct RandomRunsSqrtData;
 
 /// A trait for generalizing sorting data creation
-pub trait Data<T: Sized + Ord + std::fmt::Debug>: Default {
+pub trait Data<T: Ord + std::fmt::Debug>: Default {
     /// Initialize a vector of the given size
     fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T>;
-}
-
-impl<T> Data<T> for UniformData
-where
-    T: Ord + Extremes + rand::distr::uniform::SampleUniform + std::fmt::Debug,
-{
-    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
-        rand::distr::Uniform::new(T::MIN, T::MAX)
-            .unwrap()
-            .sample_iter(rng)
-            .take(size)
-            .collect()
-    }
 }
 
 impl<T> Data<T> for PermutationData
@@ -296,36 +253,3 @@ where
         RandomRunsData(size.isqrt()).initialize(size, rng)
     }
 }
-
-impl<
-    D: Data<u32>,
-    T: Ord + std::fmt::Debug + From<u32>,
-    C: BlobComparisonMethod<T, N>,
-    const N: usize,
-> Data<Blob<T, C, N>> for D
-{
-    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<Blob<T, C, N>> {
-        <Self as Data<u32>>::initialize(self, size, rng)
-            .into_iter()
-            .map(|i| i.into())
-            .collect()
-    }
-}
-
-/// Implement distribution data for the given integer types
-macro_rules! impl_for_integers {
-    ($($type:ty),*) => {
-        $(
-            impl_for_integers!(@single $type);
-        )*
-    };
-    (@single $type:ty) => {
-        impl Extremes for $type {
-            const MIN: Self = Self::MIN;
-            const MAX: Self = Self::MAX;
-        }
-    }
-}
-
-// Implement the Data trait for the default integer types
-impl_for_integers!(u8, u16, u32, u64, u128);
