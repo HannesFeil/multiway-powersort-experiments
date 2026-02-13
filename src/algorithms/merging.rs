@@ -133,98 +133,162 @@ impl<T> BufGuard<T> for Vec<T> {
     }
 }
 
+// TODO: integrate better?
 #[allow(dead_code)]
 pub static MERGE_SLICE_COUNTER: crate::data::GlobalCounter = crate::data::GlobalCounter::new();
 #[allow(dead_code)]
 pub static MERGE_BUFFER_COUNTER: crate::data::GlobalCounter = crate::data::GlobalCounter::new();
 
-mod slice {
-    /// Copies the first `count` elements from `src` to `dst` and returns the slices with the
-    /// prefix stripped, e.g. `(&src[count..], &mut dst[count..])`
-    pub(super) fn copy_prefix_to_uninit<T>(
-        src: &mut &[T],
-        dst: &mut &mut [std::mem::MaybeUninit<T>],
-        count: usize,
-    ) {
-        assert!(src.len() >= count && dst.len() >= count);
+#[derive(Debug)]
+pub struct Run<T>(std::ops::Range<*mut T>);
 
-        // SAFETY: We checked that src and dst are long enough.
-        // The writing is valid since MaybeUninit<T> has the same layout, size and ABI as as T and
-        // elements in [T] are guaranteed to be laid out sequentially in memory
-        // (see https://doc.rust-lang.org/reference/type-layout.html#slice-layout)).
-        //
-        // Additionally the owner of dst is responsible for not causing UB when reading non Copy
-        // elements.
+impl<T> Clone for Run<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> Run<T> {
+    pub fn start(&self) -> *mut T {
+        self.0.start
+    }
+
+    pub fn end(&self) -> *mut T {
+        self.0.end
+    }
+
+    /// # Safety
+    ///
+    /// All safety conditions of `<*mut T>::offset_from_unsigned()` must hold for
+    /// [`Self::start()`] and [`Self::end()`].
+    pub unsafe fn len(&self) -> usize {
+        debug_assert!(self.start() <= self.end());
+
+        unsafe { self.0.end.offset_from_unsigned(self.0.start) }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Copies `count` elements from the beginning of this run to the beginning of the other run
+    /// and moves both run's starts after the copied elements
+    ///
+    /// # Safety
+    ///
+    /// All safety conditions of [`std::ptr::copy_nonoverlapping()`] must hold for
+    /// [`self.start()`](Self::start()) and [`other.start()`](Self::start()) and `count`.
+    pub unsafe fn copy_nonoverlapping_prefix_to(&mut self, other: &mut Self, count: usize) {
         unsafe {
-            std::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr() as *mut T, count);
+            debug_assert!(self.len() >= count && other.len() >= count);
+
+            std::ptr::copy_nonoverlapping(self.0.start, other.0.start, count);
+
+            self.0.start = self.0.start.add(count);
+            other.0.start = other.0.start.add(count);
         }
-
-        // Adjust slice sizes
-        *src = src.split_off(count..).unwrap();
-        *dst = dst.split_off_mut(count..).unwrap();
     }
 
-    /// Copies the first `count` elements from `src` to `dst` and returns the slices with the
-    /// prefix stripped, e.g. `(&mut src[count..], &mut dst[count..])`
-    pub(super) fn copy_mut_prefix_to_uninit<T>(
-        src: &mut &mut [T],
-        dst: &mut &mut [std::mem::MaybeUninit<T>],
-        count: usize,
-    ) {
-        assert!(src.len() >= count && dst.len() >= count);
-
-        let temp_src = &mut &(**src);
-        copy_prefix_to_uninit(temp_src, dst, count);
-
-        // Adjust src size (dst has been adjusted by copy_prefix_to_uninit)
-        *src = src.split_off_mut(count..).unwrap();
-    }
-
-    /// Copies the last `count` elements from `src` to `dst` and returns the slices with the
-    /// prefix stripped, e.g. `(&src[count..], &mut dst[count..])`
-    pub(super) fn copy_suffix_to_uninit<T>(
-        src: &mut &[T],
-        dst: &mut &mut [std::mem::MaybeUninit<T>],
-        count: usize,
-    ) {
-        assert!(src.len() >= count && dst.len() >= count);
-        let src_offset = src.len() - count;
-        let dst_offset = dst.len() - count;
-
-        // SAFETY: We checked that src and dst are long enough.
-        // The writing is valid since MaybeUninit<T> has the same layout, size and ABI as as T and
-        // elements in [T] are guaranteed to be laid out sequentially in memory
-        // (see https://doc.rust-lang.org/reference/type-layout.html#slice-layout)).
-        //
-        // Additionally the owner of dst is responsible for not causing UB when reading non Copy
-        // elements.
+    /// Copies `count` elements from the beginning of this run to the beginning of the other run
+    /// and moves both run's starts after the copied elements
+    ///
+    /// # Safety
+    ///
+    /// All safety conditions of [`std::ptr::copy()`] must hold for
+    /// [`self.start()`](Self::start()) and [`other.start()`](Self::start()) and `count`.
+    pub unsafe fn copy_prefix_to(&mut self, other: &mut Self, count: usize) {
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                src.as_ptr().add(src_offset),
-                dst.as_mut_ptr().add(dst_offset) as *mut T,
-                count,
-            );
-        }
+            debug_assert!(self.len() >= count && other.len() >= count);
 
-        // Adjust slice sizes
-        *src = src.split_off(..src_offset).unwrap();
-        *dst = dst.split_off_mut(..dst_offset).unwrap();
+            std::ptr::copy(self.0.start, other.0.start, count);
+
+            self.0.start = self.0.start.add(count);
+            other.0.start = other.0.start.add(count);
+        }
     }
 
-    /// Copies the last `count` elements from `src` to `dst` and returns the slices with the
-    /// suffix stripped, e.g. `(&mut src[count..], &mut dst[count..])`
-    pub(super) fn copy_mut_suffix_to_uninit<T>(
-        src: &mut &mut [T],
-        dst: &mut &mut [std::mem::MaybeUninit<T>],
-        count: usize,
-    ) {
-        assert!(src.len() >= count && dst.len() >= count);
-        let src_offset = src.len() - count;
+    /// Copies `count` elements from the end of this run to the end of the other run
+    /// and moves both run's ends before the copied elements
+    ///
+    /// # Safety
+    ///
+    /// All safety conditions of [`std::ptr::copy_nonoverlapping()`] must hold for
+    /// [`self.end().sub(count)`](Self::end()) and [`other.end().sub(count)`](Self::end()) and `count`.
+    pub unsafe fn copy_nonoverlapping_suffix_to(&mut self, other: &mut Self, count: usize) {
+        unsafe {
+            debug_assert!(self.len() >= count && other.len() >= count);
 
-        let temp_src = &mut &(**src);
-        copy_suffix_to_uninit(temp_src, dst, count);
+            self.0.end = self.0.end.sub(count);
+            other.0.end = other.0.end.sub(count);
 
-        // Adjust src size (dst has been adjusted by copy_prefix_to_uninit)
-        *src = src.split_off_mut(..src_offset).unwrap();
+            std::ptr::copy_nonoverlapping(self.0.end, other.0.end, count);
+        }
+    }
+
+    /// Copies `count` elements from the end of this run to the end of the other run
+    /// and moves both run's ends before the copied elements
+    ///
+    /// # Safety
+    ///
+    /// All safety conditions of [`std::ptr::copy()`] must hold for
+    /// [`self.end().`](Self::end()) and [`other.end()`](Self::end()) and `count`.
+    pub unsafe fn copy_suffix_to(&mut self, other: &mut Self, count: usize) {
+        unsafe {
+            debug_assert!(self.len() >= count && other.len() >= count);
+
+            self.0.end = self.0.end.sub(count);
+            other.0.end = other.0.end.sub(count);
+
+            std::ptr::copy(self.0.end, other.0.end, count);
+        }
+    }
+}
+
+pub struct MergingDropGuard<T, const N: usize> {
+    pub runs: [Run<T>; N],
+    pub output: Run<T>,
+    sealed: std::marker::PhantomData<()>,
+}
+
+impl<T, const N: usize> MergingDropGuard<T, N> {
+    /// Construct a new merging drop guard.
+    /// When this struct is dropped, all runs in `runs` which are not empty, will be
+    /// written into `output`.
+    ///
+    /// # Safety
+    ///
+    /// The sum of the length of the remaining `runs` must be smaller or equal to the length of
+    /// `output`. The pointer ranges must be valid to read from and write to respectively.
+    /// This invariant must not be invalidated while mutating any of the public fields.
+    /// To disarm the guard see [Self::disarm()].
+    pub unsafe fn new(runs: [Run<T>; N], output: Run<T>) -> Self {
+        Self {
+            runs,
+            output,
+            sealed: std::marker::PhantomData,
+        }
+    }
+
+    /// Disarms this guard and returns it's components `(runs, output)`.
+    ///
+    /// This is safe, since no guarantees are given and any unsafe operations during drop are skipped.
+    pub fn disarm(self) -> ([Run<T>; N], Run<T>) {
+        let dont_drop = std::mem::ManuallyDrop::new(self);
+        let runs = dont_drop.runs.clone();
+        let output = dont_drop.output.clone();
+        (runs, output)
+    }
+}
+
+impl<T, const N: usize> Drop for MergingDropGuard<T, N> {
+    fn drop(&mut self) {
+        for run in self.runs.iter_mut() {
+            if !run.is_empty() {
+                // SAFETY: See condition on [`Self::new()`]
+                unsafe {
+                    run.copy_prefix_to(&mut self.output, run.len());
+                }
+            }
+        }
     }
 }

@@ -56,24 +56,49 @@ impl MergingMethod for CopyBoth {
         // assume slice.len() elements in buffer are initialized and may be copied back into slice
         // without duplication.
         unsafe {
-            let output = &mut &mut buffer[..slice.len()];
-            let (ref mut left, ref mut right) = slice.split_at(run_length);
+            // Copy entire slice into buffer
+            std::ptr::copy_nonoverlapping(
+                slice.as_ptr(),
+                buffer.as_mut_ptr() as *mut T,
+                slice.len(),
+            );
+
+            let std::ops::Range { start, end } = buffer[..slice.len()].as_mut_ptr_range();
+            let output = super::Run(std::ops::Range {
+                start: start as *mut T,
+                end: end as *mut T,
+            });
+            let runs = {
+                let (left, right) = slice.split_at_mut(run_length);
+                [
+                    super::Run(left.as_mut_ptr_range()),
+                    super::Run(right.as_mut_ptr_range()),
+                ]
+            };
+
+            // SAFETY: all runs are readable valid subslices and output is writable and large
+            // enough for all elements in slice.
+            let mut guard = super::MergingDropGuard::new(runs, output);
+
+            // Destructure bindings for easier access, these are only references and
+            // guard is still responsible for cleaning up.
+            let &mut [ref mut left, ref mut right] = &mut guard.runs;
 
             // Repeatedly copy the smaller element of both runs into the buffer
             while !left.is_empty() && !right.is_empty() {
-                if left.first().unwrap() <= right.first().unwrap() {
-                    super::slice::copy_prefix_to_uninit(left, output, 1);
+                if *left.start() <= *right.start() {
+                    left.copy_nonoverlapping_prefix_to(&mut guard.output, 1);
                 } else {
-                    super::slice::copy_prefix_to_uninit(right, output, 1);
+                    right.copy_nonoverlapping_prefix_to(&mut guard.output, 1);
                 }
             }
 
             // Copy the rest of the remaining run into the buffer
             if !left.is_empty() {
-                super::slice::copy_prefix_to_uninit(left, output, left.len());
+                left.copy_nonoverlapping_prefix_to(&mut guard.output, left.len());
             }
             if !right.is_empty() {
-                super::slice::copy_prefix_to_uninit(right, output, right.len());
+                right.copy_nonoverlapping_prefix_to(&mut guard.output, right.len());
             }
 
             // NOTE: We copy after the merging as opposed to before, to prevent inconsistent
@@ -223,6 +248,17 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             "Split point has to be within slice bounds"
         );
 
+        // FIXME: this is all wrong
+        // Copy back the merged elements from the buffer
+        // TODO: safety comment
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                buffer.as_ptr() as *const T,
+                slice.as_mut_ptr(),
+                slice.len(),
+            );
+        }
+
         // Wrapping in closure for early return (ugly?)
         // FIXME: expand unsafe block
         (|| {
@@ -329,15 +365,6 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                 super::slice::copy_mut_prefix_to_uninit(left, output, left.len());
             }
         })();
-        // Copy back the merged elements from the buffer
-        // TODO: safety comment
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                buffer.as_ptr() as *const T,
-                slice.as_mut_ptr(),
-                slice.len(),
-            );
-        }
     }
 
     fn merge_high<T: Ord>(

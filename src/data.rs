@@ -88,8 +88,8 @@ impl<T: Ord + TryFrom<usize>, C: BlobComparisonMethod<T, N>, const N: usize> Try
         assert!(N <= 64, "Cannot create blobs with size greater than 64");
 
         let mut elements: Vec<T> = vec![];
-        for i in 0..N {
-            elements.push((value % BLOB_PRIMES[i] as usize).try_into()?)
+        for prime in BLOB_PRIMES.iter().copied().take(N) {
+            elements.push((value % prime as usize).try_into()?)
         }
 
         Ok(Blob(
