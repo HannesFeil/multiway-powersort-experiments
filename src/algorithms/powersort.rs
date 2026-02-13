@@ -149,7 +149,7 @@ impl<
     }
 
     fn next_run<T: Ord>(slice: &mut [T], start: usize) -> Run {
-        let run = start..Self::extend_run(&mut slice[start..]);
+        let run = start..start + Self::extend_run(&mut slice[start..]);
 
         if run.len() < MIN_RUN_LENGTH {
             let end = std::cmp::min(slice.len(), start + MIN_RUN_LENGTH);
@@ -311,7 +311,7 @@ impl<
     }
 
     fn next_run<T: Ord>(slice: &mut [T], start: usize) -> Run {
-        let run = start..Self::extend_run(&mut slice[start..]);
+        let run = start..start + Self::extend_run(&mut slice[start..]);
 
         if run.len() < MIN_RUN_LENGTH {
             let end = std::cmp::min(slice.len(), start + MIN_RUN_LENGTH);
