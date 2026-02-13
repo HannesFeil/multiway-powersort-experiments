@@ -109,7 +109,7 @@ fn perform_time_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
         |ignore, (samples, stats), elapsed| {
             if !ignore {
                 samples.push(elapsed);
-                stats.update(elapsed.as_micros() as f64);
+                stats.update(elapsed.as_nanos() as f64);
             }
         },
         sorter,
