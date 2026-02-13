@@ -206,6 +206,10 @@ pub struct RandomRunsData(usize);
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RandomRunsSqrtData;
 
+/// A permutation with random runs
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RandomRunsConstData<const LENGTH: usize>;
+
 /// A trait for generalizing sorting data creation
 pub trait Data<T: Ord + std::fmt::Debug>: Default {
     /// Initialize a vector of the given size
@@ -251,5 +255,15 @@ where
 {
     fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
         RandomRunsData(size.isqrt()).initialize(size, rng)
+    }
+}
+
+impl<T, const LENGTH: usize> Data<T> for RandomRunsConstData<LENGTH>
+where
+    T: Ord + TryFrom<usize> + std::fmt::Debug,
+    <T as TryFrom<usize>>::Error: std::fmt::Debug,
+{
+    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+        RandomRunsData(LENGTH).initialize(size, rng)
     }
 }

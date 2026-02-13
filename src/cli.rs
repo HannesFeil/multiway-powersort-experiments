@@ -300,6 +300,13 @@ declare_data_types! {
     // u32
     PermutationU32: u32, crate::data::PermutationData,
     RandomRunsSqrtU32: u32, crate::data::RandomRunsSqrtData,
+    RandomRuns3U32: u32, crate::data::RandomRunsConstData<3>,
+    RandomRuns30U32: u32, crate::data::RandomRunsConstData<30>,
+    RandomRuns300U32: u32, crate::data::RandomRunsConstData<300>,
+    RandomRuns3000U32: u32, crate::data::RandomRunsConstData<3000>,
+    RandomRuns30000U32: u32, crate::data::RandomRunsConstData<30000>,
+    RandomRuns300000U32: u32, crate::data::RandomRunsConstData<300000>,
+    RandomRuns3000000U32: u32, crate::data::RandomRunsConstData<3000000>,
 
     // blob2u64
     PermutationLP: Blob2U64CmpFirst, crate::data::PermutationData,
