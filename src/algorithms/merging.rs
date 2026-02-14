@@ -148,6 +148,13 @@ impl<T> Clone for Run<T> {
     }
 }
 
+impl<T> Run<std::mem::MaybeUninit<T>> {
+    // Assume all elements in the contained range are initialized.
+    pub unsafe fn assume_init(self) -> Run<T> {
+        Run(self.0.start as *mut T..self.0.end as *mut T)
+    }
+}
+
 impl<T> Run<T> {
     pub fn start(&self) -> *mut T {
         self.0.start
@@ -169,6 +176,10 @@ impl<T> Run<T> {
 
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    pub unsafe fn as_slice(&mut self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.start(), self.len()) }
     }
 
     /// Copies `count` elements from the beginning of this run to the beginning of the other run
@@ -277,6 +288,11 @@ impl<T, const N: usize> MergingDropGuard<T, N> {
         let runs = dont_drop.runs.clone();
         let output = dont_drop.output.clone();
         (runs, output)
+    }
+
+    /// Returns whether all runs are empty and there is nothing to clean up
+    pub fn is_empty(&self) -> bool {
+        self.runs.iter().all(Run::is_empty)
     }
 }
 

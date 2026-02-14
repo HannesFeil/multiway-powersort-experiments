@@ -125,7 +125,7 @@ impl MultiMergingMethod<4> for MergeRunsIndices4 {
                 y
             };
         for _ in 0..slice.len() {
-            super::slice::copy_prefix_to_uninit(runs[z], output, 1);
+            // super::slice::copy_prefix_to_uninit(runs[z], output, 1);
             if z <= 1 {
                 x = if runs[0].first().map(std::cmp::Reverse)
                     >= runs[1].first().map(std::cmp::Reverse)
