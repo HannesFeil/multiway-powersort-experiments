@@ -38,41 +38,41 @@ run_sorts() {
 
 echo "Experiment 1: int, random runs, various n"
 
-run_sorts 1001     10000 random-runs-sqrt-u32  times-runs-e4-int >> ${OUTPUT}/times-runs-int.out
-run_sorts 1001    100000 random-runs-sqrt-u32 times-runs-e5-int >> ${OUTPUT}/times-runs-int.out
-run_sorts 1001   1000000 random-runs-sqrt-u32   times-runs-e6-int >> ${OUTPUT}/times-runs-int.out
-run_sorts  101  10000000 random-runs-sqrt-u32  times-runs-e7-int >> ${OUTPUT}/times-runs-int.out
-run_sorts  101 100000000 random-runs-sqrt-u32 times-runs-e8-int >> ${OUTPUT}/times-runs-int.out
+run_sorts 1001     10000 random-runs-sqrt-u32 times-runs-int-e4 >> ${OUTPUT}/times-runs-int.out
+run_sorts 1001    100000 random-runs-sqrt-u32 times-runs-int-e5 >> ${OUTPUT}/times-runs-int.out
+run_sorts 1001   1000000 random-runs-sqrt-u32 times-runs-int-e6 >> ${OUTPUT}/times-runs-int.out
+run_sorts  101  10000000 random-runs-sqrt-u32 times-runs-int-e7 >> ${OUTPUT}/times-runs-int.out
+run_sorts  101 100000000 random-runs-sqrt-u32 times-runs-int-e8 >> ${OUTPUT}/times-runs-int.out
 
 echo "Experiment 2: 10^7 ints distribution, random runs"
 
 for runs in 3 30 300 3000 30000 300000 3000000
 do
-  run_sorts 101 10000000 random-runs${runs}-u32 times-runs${runs}-e7-int >> ${OUTPUT}/times-runs${runs}-int.out
+  run_sorts 101 10000000 random-runs${runs}-u32 times-runs${runs}-int-e7 >> ${OUTPUT}/times-runs${runs}-int.out
 done
 
 echo "Experiment 3: long+pointer, random runs, various n"
 
-run_sorts 1001     10000 random-runs-sqrt-lp  times-runs-e4-l+p >> ${OUTPUT}/times-runs-l+p.out
-run_sorts 1001    100000 random-runs-sqrt-lp times-runs-e5-l+p >> ${OUTPUT}/times-runs-l+p.out
-run_sorts 1001   1000000 random-runs-sqrt-lp   times-runs-e6-l+p >> ${OUTPUT}/times-runs-l+p.out
-run_sorts  101  10000000 random-runs-sqrt-lp  times-runs-e7-l+p >> ${OUTPUT}/times-runs-l+p.out
-run_sorts  101 100000000 random-runs-sqrt-lp times-runs-e8-l+p >> ${OUTPUT}/times-runs-l+p.out
+run_sorts 1001     10000 random-runs-sqrt-lp times-runs-l+p-e4 >> ${OUTPUT}/times-runs-l+p.out
+run_sorts 1001    100000 random-runs-sqrt-lp times-runs-l+p-e5 >> ${OUTPUT}/times-runs-l+p.out
+run_sorts 1001   1000000 random-runs-sqrt-lp times-runs-l+p-e6 >> ${OUTPUT}/times-runs-l+p.out
+run_sorts  101  10000000 random-runs-sqrt-lp times-runs-l+p-e7 >> ${OUTPUT}/times-runs-l+p.out
+run_sorts  101 100000000 random-runs-sqrt-lp times-runs-l+p-e8 >> ${OUTPUT}/times-runs-l+p.out
 
 echo "Experiment 4: int, random permutations, various n"
 
-run_sorts 1001     10000 permutation-u32  times-runs-e4-int-rp >> ${OUTPUT}/times-rp-int.out
-run_sorts 1001    100000 permutation-u32 times-runs-e5-int-rp >> ${OUTPUT}/times-rp-int.out
-run_sorts 1001   1000000 permutation-u32   times-runs-e6-int-rp >> ${OUTPUT}/times-rp-int.out
-run_sorts  101  10000000 permutation-u32  times-runs-e7-int-rp >> ${OUTPUT}/times-rp-int.out
-run_sorts  101 100000000 permutation-u32 times-runs-e8-int-rp >> ${OUTPUT}/times-rp-int.out
+run_sorts 1001     10000 permutation-u32 times-rp-int-e4 >> ${OUTPUT}/times-rp-int.out
+run_sorts 1001    100000 permutation-u32 times-rp-int-e5 >> ${OUTPUT}/times-rp-int.out
+run_sorts 1001   1000000 permutation-u32 times-rp-int-e6 >> ${OUTPUT}/times-rp-int.out
+run_sorts  101  10000000 permutation-u32 times-rp-int-e7 >> ${OUTPUT}/times-rp-int.out
+run_sorts  101 100000000 permutation-u32 times-rp-int-e8 >> ${OUTPUT}/times-rp-int.out
 
 echo "Experiment 5: count comparisons and merge cost, random runs, various n"
 
 cargo build --release --features counters
 
-run_sorts 1001     10000 random-runs-sqrt-u32  times-runs-e4-int-cmp >> ${OUTPUT}/times-runs-cmps.out
-run_sorts 1001    100000 random-runs-sqrt-u32 times-runs-e5-int-cmp >> ${OUTPUT}/times-runs-cmps.out
-run_sorts 1001   1000000 random-runs-sqrt-u32   times-runs-e6-int-cmp >> ${OUTPUT}/times-runs-cmps.out
-run_sorts  101  10000000 random-runs-sqrt-u32  times-runs-e7-int-cmp >> ${OUTPUT}/times-runs-cmps.out
-run_sorts  101 100000000 random-runs-sqrt-u32 times-runs-e8-int-cmp >> ${OUTPUT}/times-runs-cmps.out
+run_sorts 1001     10000 random-runs-sqrt-u32 times-runs-int-cmp-e4 >> ${OUTPUT}/times-runs-cmps.out
+run_sorts 1001    100000 random-runs-sqrt-u32 times-runs-int-cmp-e5 >> ${OUTPUT}/times-runs-cmps.out
+run_sorts 1001   1000000 random-runs-sqrt-u32 times-runs-int-cmp-e6 >> ${OUTPUT}/times-runs-cmps.out
+run_sorts  101  10000000 random-runs-sqrt-u32 times-runs-int-cmp-e7 >> ${OUTPUT}/times-runs-cmps.out
+run_sorts  101 100000000 random-runs-sqrt-u32 times-runs-int-cmp-e8 >> ${OUTPUT}/times-runs-cmps.out
