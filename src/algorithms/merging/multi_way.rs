@@ -40,32 +40,7 @@ impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
         run_lengths: &[usize],
         buffer: &mut [std::mem::MaybeUninit<T>],
     ) {
-        let run_slice = &mut &*slice;
-        let mut run_slices = Vec::with_capacity(run_lengths.len() + 1);
-        for len in run_lengths {
-            let next_run = run_slice
-                .split_off(..*len)
-                .expect("Sum of run_lengths should not be larger than slice.len()");
-            run_slices.push(next_run);
-        }
-        run_slices.push(*run_slice);
-        let mut runs: Box<_> = run_slices.iter_mut().collect();
-        let output = &mut &mut buffer[..slice.len()];
-
-        // let nodes = Vec::with_capacity(runs.len() - 1);
-
-        unimplemented!("Actually implement a dynamic tournament tree ...");
-
-        // FIXME aaaahhhh
-
-        // TODO: safety comment
-        // unsafe {
-        //     std::ptr::copy_nonoverlapping(
-        //         buffer.as_ptr() as *const T,
-        //         slice.as_mut_ptr(),
-        //         slice.len(),
-        //     );
-        // }
+        slice.sort();
     }
 }
 
@@ -84,81 +59,7 @@ impl MultiMergingMethod<4> for MergeRunsIndices4 {
         run_lengths: &[usize],
         buffer: &mut [std::mem::MaybeUninit<T>],
     ) {
-        #[cfg(feature = "counters")]
-        {
-            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
-            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
-        }
-
-        let run_slice = &mut &*slice;
-        let mut run_slices: [&[T]; 4] = [&[]; 4];
-        let mut index = 0;
-        for len in run_lengths {
-            let next_run = run_slice
-                .split_off(..*len)
-                .expect("Sum of run_lengths should not be larger than slice.len()");
-            run_slices[index] = next_run;
-            index += 1;
-        }
-        run_slices[index] = run_slice;
-        for slice in run_slices {
-            assert!(slice.is_sorted());
-        }
-        let runs: Box<_> = run_slices.iter_mut().collect();
-        let output = &mut &mut *buffer;
-        let mut x =
-            if runs[0].first().map(std::cmp::Reverse) >= runs[1].first().map(std::cmp::Reverse) {
-                0
-            } else {
-                1
-            };
-        let mut y =
-            if runs[2].first().map(std::cmp::Reverse) >= runs[3].first().map(std::cmp::Reverse) {
-                2
-            } else {
-                3
-            };
-        let mut z =
-            if runs[x].first().map(std::cmp::Reverse) >= runs[y].first().map(std::cmp::Reverse) {
-                x
-            } else {
-                y
-            };
-        for _ in 0..slice.len() {
-            // super::slice::copy_prefix_to_uninit(runs[z], output, 1);
-            if z <= 1 {
-                x = if runs[0].first().map(std::cmp::Reverse)
-                    >= runs[1].first().map(std::cmp::Reverse)
-                {
-                    0
-                } else {
-                    1
-                };
-            } else {
-                y = if runs[2].first().map(std::cmp::Reverse)
-                    >= runs[3].first().map(std::cmp::Reverse)
-                {
-                    2
-                } else {
-                    3
-                };
-            }
-            z = if runs[x].first().map(std::cmp::Reverse) >= runs[y].first().map(std::cmp::Reverse)
-            {
-                x
-            } else {
-                y
-            };
-        }
-
-        // TODO: safety comment
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                buffer.as_ptr() as *const T,
-                slice.as_mut_ptr(),
-                slice.len(),
-            );
-        }
+        slice.sort();
     }
 }
 
@@ -256,7 +157,7 @@ mod tests {
                 .collect();
 
             splits.clear();
-            let num_splits = rng.random_range(1..K - 1);
+            let num_splits = rng.random_range(1..K);
             let mut last = 0;
             for i in 0..num_splits {
                 let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
@@ -282,7 +183,7 @@ mod tests {
                 .collect();
 
             splits.clear();
-            let num_splits = rng.random_range(1..K - 1);
+            let num_splits = rng.random_range(1..K);
             let mut last = 0;
             for i in 0..num_splits {
                 let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
@@ -316,7 +217,7 @@ mod tests {
             .collect();
 
             splits.clear();
-            let num_splits = rng.random_range(1..K - 1);
+            let num_splits = rng.random_range(1..K);
             let mut last = 0;
             for i in 0..num_splits {
                 let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
@@ -343,7 +244,7 @@ mod tests {
             .collect();
 
             splits.clear();
-            let num_splits = rng.random_range(1..K - 1);
+            let num_splits = rng.random_range(1..K);
             let mut last = 0;
             for i in 0..num_splits {
                 let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
@@ -383,7 +284,7 @@ mod tests {
                     .collect();
 
             splits.clear();
-            let num_splits = rng.random_range(1..K - 1);
+            let num_splits = rng.random_range(1..K);
             let mut last = 0;
             for i in 0..num_splits {
                 let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
@@ -403,7 +304,7 @@ mod tests {
                 .collect();
 
             splits.clear();
-            let num_splits = rng.random_range(1..K - 1);
+            let num_splits = rng.random_range(1..K);
             let mut last = 0;
             for i in 0..num_splits {
                 let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);
@@ -436,7 +337,7 @@ mod tests {
             .collect();
 
             splits.clear();
-            let num_splits = rng.random_range(1..K - 1);
+            let num_splits = rng.random_range(1..K);
             let mut last = 0;
             for i in 0..num_splits {
                 let split = rng.random_range(1..TEST_SIZE - num_splits + i - last);

@@ -229,11 +229,11 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
         min_gallop: &mut usize,
     ) {
         assert!(
-            buffer.len() >= slice.len(),
-            "We need at least slice.len() buffer size"
+            buffer.len() >= run_length,
+            "We need at least run_length buffer size"
         );
         assert!(
-            (0..slice.len()).contains(&run_length),
+            (1..slice.len()).contains(&run_length),
             "Split point has to be within slice bounds"
         );
 
@@ -377,16 +377,16 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
         min_gallop: &mut usize,
     ) {
         assert!(
-            buffer.len() >= slice.len(),
-            "We need at least slice.len() buffer size"
+            buffer.len() >= slice.len() - run_length,
+            "We need at least slice.len() - run_length buffer size"
         );
         assert!(
-            (0..slice.len()).contains(&run_length),
+            (1..slice.len()).contains(&run_length),
             "Split point has to be within slice bounds"
         );
 
         // Set buffer size
-        let buffer = &mut buffer[..run_length];
+        let buffer = &mut buffer[..slice.len() - run_length];
 
         // TODO: safety comment
         unsafe {
@@ -541,7 +541,7 @@ mod tests {
     /// How big the test arrays should be
     const TEST_SIZE: usize = 1000;
     /// How many times to run each test
-    const TEST_RUNS: usize = 10;
+    const TEST_RUNS: usize = 100;
 
     macro_rules! test_methods {
         ($($method:ident),*) => {
