@@ -74,7 +74,7 @@ fn main() {
         #[cfg(not(feature = "counters"))]
         let data: Vec<String> = samples
             .into_iter()
-            .map(|duration| duration.as_micros().to_string())
+            .map(|duration| duration.as_nanos().to_string())
             .collect();
         #[cfg(feature = "counters")]
         let data: Vec<String> = samples
@@ -106,11 +106,9 @@ fn perform_time_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
 
     perform_experiment::<_, _, T, D>(
         (samples, stats),
-        |ignore, (samples, stats), elapsed| {
-            if !ignore {
-                samples.push(elapsed);
-                stats.update(elapsed.as_nanos() as f64);
-            }
+        |(samples, stats), elapsed| {
+            samples.push(elapsed);
+            stats.update(elapsed.as_nanos() as f64);
         },
         sorter,
         runs,
@@ -139,21 +137,18 @@ fn perform_counters_experiment<
 
     perform_experiment::<_, _, crate::data::CountComparisons<T>, D>(
         (samples, stats),
-        |ignore, (samples, stats), _| {
-            let comparisons = crate::data::CountComparisons::<T>::read_and_reset_counter();
-            let alloc = crate::algorithms::merging::ALLOC_COUNTER.read_and_reset();
-            let merge_slice_cost = crate::algorithms::merging::MERGE_SLICE_COUNTER.read_and_reset();
+        |(samples, stats), _| {
+            let comparisons = data::COMPARISON_COUNTER.read_and_reset();
+            let alloc = algorithms::merging::ALLOC_COUNTER.read_and_reset();
+            let merge_slice_cost = algorithms::merging::MERGE_SLICE_COUNTER.read_and_reset();
             let merge_buffer_cost =
                 crate::algorithms::merging::MERGE_BUFFER_COUNTER.read_and_reset();
 
             let sample = [comparisons, alloc, merge_slice_cost, merge_buffer_cost];
 
-            if !ignore {
-                samples.push(sample);
-                for (stat, value) in stats.iter_mut().zip(sample.iter()) {
-                    // TODO: is this cast good?
-                    stat.update(*value as f64);
-                }
+            samples.push(sample);
+            for (stat, value) in stats.iter_mut().zip(sample.iter()) {
+                stat.update(*value as f64);
             }
         },
         sorter,
@@ -170,7 +165,7 @@ fn perform_counters_experiment<
 /// - rng: The rng used for sampling the data
 fn perform_experiment<
     S,
-    F: FnMut(bool, &mut S, std::time::Duration),
+    F: FnMut(&mut S, std::time::Duration),
     T: Ord + std::fmt::Debug,
     D: data::Data<T>,
 >(
@@ -186,24 +181,30 @@ fn perform_experiment<
     for run in 0..=runs {
         let mut data = D::default().initialize(size, rng);
 
+        reset_global_counters();
+
         let now = std::time::Instant::now();
         sorter(std::hint::black_box(&mut data));
         let elapsed = now.elapsed();
+
+        // NOTE: Skip first sample (behavior taken from original codebase)
+        if !run == 0 {
+            sampler(&mut initial, elapsed);
+            bar.inc(1);
+        }
 
         debug_assert!(
             data.is_sorted(),
             "{data:?} is not sorted after algorithm run"
         );
-
-        let ignore = run == 0;
-
-        sampler(ignore, &mut initial, elapsed);
-
-        // NOTE: Skip first sample (behavior taken from original codebase)
-        if !ignore {
-            bar.inc(1);
-        }
     }
 
     initial
+}
+
+fn reset_global_counters() {
+    data::COMPARISON_COUNTER.read_and_reset();
+    algorithms::merging::ALLOC_COUNTER.read_and_reset();
+    algorithms::merging::MERGE_SLICE_COUNTER.read_and_reset();
+    algorithms::merging::MERGE_BUFFER_COUNTER.read_and_reset();
 }

@@ -140,7 +140,7 @@ impl GlobalCounter {
     }
 }
 
-static COMPARISON_COUNTER: GlobalCounter = GlobalCounter::new();
+pub static COMPARISON_COUNTER: GlobalCounter = GlobalCounter::new();
 
 #[allow(dead_code)]
 #[repr(transparent)]
@@ -151,10 +151,6 @@ pub struct CountComparisons<T>(T);
 impl<T> CountComparisons<T> {
     fn increase_counter(amount: u64) {
         COMPARISON_COUNTER.increase(amount);
-    }
-
-    pub fn read_and_reset_counter() -> u64 {
-        COMPARISON_COUNTER.read_and_reset()
     }
 }
 
@@ -191,8 +187,6 @@ impl<T: TryFrom<usize>> TryFrom<usize> for CountComparisons<T> {
         T::try_from(value).map(Self)
     }
 }
-
-pub struct CountComparisonsSampler<T>(T);
 
 /// A random permutation data distribution
 #[derive(Debug, Clone, Copy, Default)]
