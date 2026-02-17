@@ -53,6 +53,7 @@ impl MergingMethod for CopyBoth {
 
         let buffer = &mut buffer[..slice.len()];
 
+        // FIXME: this comment is outdated
         // SAFETY: We make sure to copy each element from left and right into buffer exactly once,
         // so that buffer ends up a permutation (sorted) of slice. Therefor at the end we may
         // assume slice.len() elements in buffer are initialized and may be copied back into slice

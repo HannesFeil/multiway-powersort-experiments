@@ -26,13 +26,17 @@ pub trait MultiMergingMethod<const K: usize> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct DynamicTournamentTree;
+pub struct TournamentTree;
 
-impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
+impl<const K: usize> MultiMergingMethod<K> for TournamentTree
+where
+    typenum::Const<K>: typenum::ToUInt<Output: typenum::Unsigned>,
+    TournamentTreeImpl<typenum::U<K>>: TournamentTreeImplementation,
+{
     const IS_STABLE: bool = true;
 
     fn display() -> String {
-        "dynamic-tournament-tree".to_string()
+        format!("tournament-tree-{K}")
     }
 
     fn merge<T: Ord>(
@@ -40,18 +44,167 @@ impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
         run_lengths: &[usize],
         buffer: &mut [std::mem::MaybeUninit<T>],
     ) {
-        slice.sort();
+        if slice.is_empty() {
+            return;
+        }
+
+        #[cfg(feature = "counters")]
+        {
+            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
+            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+        }
+
+        assert!(
+            buffer.len() >= slice.len(),
+            "Buffer needs to have at least the size of slice"
+        );
+        assert!(
+            (run_lengths).iter().sum::<usize>() <= slice.len(),
+            "Split points need to be in bounds"
+        );
+
+        let buffer = &mut buffer[..slice.len()];
+
+        // TODO: safety comment
+        unsafe {
+            // Copy entire slice into buffer
+            std::ptr::copy_nonoverlapping(
+                slice.as_ptr(),
+                buffer.as_mut_ptr() as *mut T,
+                slice.len(),
+            );
+
+            let ptr_range = buffer.as_mut_ptr_range();
+            let mut run_end = ptr_range.start;
+            let runs: [_; K] = std::array::from_fn(|i| {
+                let run_start = run_end;
+                run_end = run_lengths
+                    .get(i)
+                    .map(|len| run_start.add(*len))
+                    .unwrap_or(ptr_range.end);
+
+                super::Run(run_start..run_end).assume_init()
+            });
+            let output = super::Run(slice.as_mut_ptr_range());
+
+            // SAFETY: all runs are readable valid subslices and output is writable and large
+            // enough for all elements in slice.
+            let mut guard = super::MergingDropGuard::new(runs, output);
+
+            let runs = &mut guard.runs;
+            let output = &mut guard.output;
+
+            TournamentTreeImpl::<typenum::U<K>>::tournament_tree_merge::<_, K>(runs, output);
+
+            debug_assert!(guard.is_empty());
+            guard.disarm();
+        }
+    }
+}
+
+trait TournamentTreeImplementation {
+    type K: typenum::Unsigned;
+
+    unsafe fn tournament_tree_merge<'runs, T: Ord, const CAPACITY: usize>(
+        _runs: &'runs mut [super::Run<T>; CAPACITY],
+        _output: &'runs mut super::Run<T>,
+    );
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TournamentTreeImpl<K: typenum::Unsigned>(std::marker::PhantomData<K>);
+
+impl TournamentTreeImplementation for TournamentTreeImpl<typenum::U1> {
+    type K = typenum::U1;
+
+    unsafe fn tournament_tree_merge<'runs, T: Ord, const CAPACITY: usize>(
+        runs: &'runs mut [super::Run<T>; CAPACITY],
+        output: &'runs mut super::Run<T>,
+    ) {
+        let run = runs.first_mut().unwrap();
+
+        unsafe {
+            run.copy_nonoverlapping_prefix_to(output, run.len());
+        }
+    }
+}
+
+macro_rules! impl_tournament_tree_for_types {
+    (
+        [$($type:ty),*$(,)?]
+        impl $trait:ty {
+            $function_impl:item
+        }
+    ) => {
+        $(
+            impl TournamentTreeImplementation for TournamentTreeImpl<$type> {
+                type K = $type;
+
+                $function_impl
+            }
+        )*
+    }
+}
+
+impl_tournament_tree_for_types! {
+    [
+        typenum::U2,
+        typenum::U3,
+        typenum::U4,
+        typenum::U5,
+        typenum::U6,
+        typenum::U7,
+        typenum::U8,
+    ]
+    impl TournamentTreeImplementation {
+        unsafe fn tournament_tree_merge<'runs, T: Ord, const CAPACITY: usize>(
+            runs: &'runs mut [super::Run<T>; CAPACITY],
+            output: &'runs mut super::Run<T>,
+        ) {
+            use typenum::Unsigned;
+
+            let k = Self::K::USIZE;
+
+            unsafe {
+                'merging:
+                loop {
+                    let mut min_length = usize::MAX;
+
+                    for i in 0..k {
+                        match runs[i].len() {
+                            0 => {
+                                // Empty run, swap to end and continue with fewer runs
+                                runs[i..k].rotate_left(1);
+                                break 'merging;
+                            }
+                            len @ 1.. => min_length = min_length.min(len),
+                        }
+                    }
+
+                    for _ in 0..min_length {
+                        let min = runs.iter_mut().take(k).min_by_key(|run| {
+                            let val: &T = &*run.start();
+                            val
+                        }).unwrap();
+
+                        min.copy_nonoverlapping_prefix_to(output, 1);
+                    }
+                }
+
+                TournamentTreeImpl::<typenum::Sub1<Self::K>>::tournament_tree_merge(runs, output);
+            }
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct MergeRunsIndices4;
+pub struct DynamicTournamentTree;
 
-impl MultiMergingMethod<4> for MergeRunsIndices4 {
+impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
     const IS_STABLE: bool = true;
 
     fn display() -> String {
-        "merge-runs-indices-4".to_string()
+        "dynamic-tournament-tree".to_string()
     }
 
     fn merge<T: Ord>(
@@ -132,7 +285,7 @@ mod tests {
 
     test_multi_methods! {
         DynamicTournamentTree: [2, 3, 4, 5, 6, 7, 8],
-        MergeRunsIndices4: [4],
+        TournamentTree: [2],
     }
 
     /// Test merging an empty slice
