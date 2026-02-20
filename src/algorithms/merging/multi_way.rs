@@ -28,11 +28,7 @@ pub trait MultiMergingMethod<const K: usize> {
 #[derive(Debug, Clone, Copy)]
 pub struct TournamentTree;
 
-impl<const K: usize> MultiMergingMethod<K> for TournamentTree
-where
-    typenum::Const<K>: typenum::ToUInt<Output: typenum::Unsigned>,
-    TournamentTreeImpl<typenum::U<K>>: TournamentTreeImplementation,
-{
+impl<const K: usize> MultiMergingMethod<K> for TournamentTree {
     const IS_STABLE: bool = true;
 
     fn display() -> String {
@@ -94,7 +90,7 @@ where
             let runs = &mut guard.runs;
             let output = &mut guard.output;
 
-            TournamentTreeImpl::<typenum::U<K>>::tournament_tree_merge::<_, K>(runs, output);
+            Self::tournament_tree_merge(runs, output, slice.len());
 
             debug_assert!(guard.is_empty());
             guard.disarm();
@@ -102,117 +98,63 @@ where
     }
 }
 
-trait TournamentTreeImplementation {
-    type K: typenum::Unsigned;
-
-    unsafe fn tournament_tree_merge<'runs, T: Ord, const CAPACITY: usize>(
-        _runs: &'runs mut [super::Run<T>; CAPACITY],
-        _output: &'runs mut super::Run<T>,
-    );
-}
-
-#[derive(Debug, Clone, Copy)]
-struct TournamentTreeImpl<K: typenum::Unsigned>(std::marker::PhantomData<K>);
-
-impl TournamentTreeImplementation for TournamentTreeImpl<typenum::U1> {
-    type K = typenum::U1;
-
-    unsafe fn tournament_tree_merge<'runs, T: Ord, const CAPACITY: usize>(
-        runs: &'runs mut [super::Run<T>; CAPACITY],
-        output: &'runs mut super::Run<T>,
+impl TournamentTree {
+    unsafe fn tournament_tree_merge<T: Ord, const K: usize>(
+        runs: &mut [super::Run<T>; K],
+        output: &mut super::Run<T>,
+        n: usize,
     ) {
-        let run = runs.first_mut().unwrap();
+        let compare = |a: &(usize, Option<*mut T>), b: &(usize, Option<*mut T>)| unsafe {
+            match (a.1, b.1) {
+                (None, None) => std::cmp::Ordering::Equal,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (Some(a_first), Some(b_first)) => (*a_first).cmp(&*b_first).then(a.0.cmp(&b.0)),
+            }
+        };
+
+        // Workaround for const generics
+        let mut nodes = [[(0, None); 2]; K];
+        let nodes = nodes.as_flattened_mut();
+
+        for (index, run) in runs.iter().enumerate() {
+            let projected_index = index + K - 1;
+
+            if !run.is_empty() {
+                nodes[projected_index] = (index, Some(run.start()))
+            }
+        }
+
+        for index in (0..K - 1).rev() {
+            let left_child = index * 2 + 1;
+            let right_child = index * 2 + 2;
+
+            let min = std::cmp::min_by(nodes[left_child], nodes[right_child], compare);
+            nodes[index] = min;
+        }
 
         unsafe {
-            run.copy_nonoverlapping_prefix_to(output, run.len());
-        }
-    }
-}
+            for _ in 0..n {
+                let run_index = nodes[0].0;
+                let run = &mut runs[run_index];
+                run.copy_nonoverlapping_prefix_to(output, 1);
 
-macro_rules! impl_tournament_tree_for_types {
-    (
-        [$($type:ty),*$(,)?]
-        impl $trait:ty {
-            $function_impl:item
-        }
-    ) => {
-        $(
-            impl TournamentTreeImplementation for TournamentTreeImpl<$type> {
-                type K = $type;
+                let node = (run_index, (!run.is_empty()).then_some(run.start()));
+                let mut node_index = run_index + K - 1;
+                nodes[node_index] = node;
 
-                $function_impl
-            }
-        )*
-    }
-}
+                while node_index != 0 {
+                    node_index = (node_index - 1) / 2;
 
-impl_tournament_tree_for_types! {
-    [
-        typenum::U2,
-        typenum::U3,
-        typenum::U4,
-        typenum::U5,
-        typenum::U6,
-        typenum::U7,
-        typenum::U8,
-    ]
-    impl TournamentTreeImplementation {
-        unsafe fn tournament_tree_merge<'runs, T: Ord, const CAPACITY: usize>(
-            runs: &'runs mut [super::Run<T>; CAPACITY],
-            output: &'runs mut super::Run<T>,
-        ) {
-            use typenum::Unsigned;
+                    let left_child = node_index * 2 + 1;
+                    let right_child = node_index * 2 + 2;
 
-            let k = Self::K::USIZE;
+                    let min = std::cmp::min_by(nodes[left_child], nodes[right_child], compare);
 
-            unsafe {
-                'merging:
-                loop {
-                    let mut min_length = usize::MAX;
-
-                    for i in 0..k {
-                        match runs[i].len() {
-                            0 => {
-                                // Empty run, swap to end and continue with fewer runs
-                                runs[i..k].rotate_left(1);
-                                break 'merging;
-                            }
-                            len @ 1.. => min_length = min_length.min(len),
-                        }
-                    }
-
-                    for _ in 0..min_length {
-                        let min = runs.iter_mut().take(k).min_by_key(|run| {
-                            let val: &T = &*run.start();
-                            val
-                        }).unwrap();
-
-                        min.copy_nonoverlapping_prefix_to(output, 1);
-                    }
+                    nodes[node_index] = min;
                 }
-
-                TournamentTreeImpl::<typenum::Sub1<Self::K>>::tournament_tree_merge(runs, output);
             }
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct DynamicTournamentTree;
-
-impl<const K: usize> MultiMergingMethod<K> for DynamicTournamentTree {
-    const IS_STABLE: bool = true;
-
-    fn display() -> String {
-        "dynamic-tournament-tree".to_string()
-    }
-
-    fn merge<T: Ord>(
-        slice: &mut [T],
-        run_lengths: &[usize],
-        buffer: &mut [std::mem::MaybeUninit<T>],
-    ) {
-        slice.sort();
     }
 }
 
@@ -284,8 +226,7 @@ mod tests {
     }
 
     test_multi_methods! {
-        DynamicTournamentTree: [2, 3, 4, 5, 6, 7, 8],
-        TournamentTree: [2],
+        TournamentTree: [2, 3, 4, 5, 6, 7, 8],
     }
 
     /// Test merging an empty slice

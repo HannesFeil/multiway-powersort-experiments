@@ -10,7 +10,6 @@ paste = "1.0.15"
 rand = "0.9.2"
 rand_distr = "0.5.1"
 rolling-stats = "0.8.0"
-typenum = { version = "1.19.0", features = ["const-generics"] }
 
 [features]
 default = []
