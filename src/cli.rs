@@ -231,6 +231,24 @@ declare_variants! {
         ],
         Algorithm::MultiwayPowersort => [
             powersort::MultiwayPowerSort,
+            powersort::MultiwayPowerSort<
+                powersort::node_power::DivisionLoop,
+                powersort::DefaultInsertionSort,
+                powersort::DefaultMultiMergingMethod,
+                powersort::DefaultBufGuardFactory,
+                6,
+                { powersort::DEFAULT_MIN_RUN_LENGTH },
+                { powersort::DEFAULT_ONLY_INCREASING_RUNS },
+            >,
+            powersort::MultiwayPowerSort<
+                powersort::DefaultNodePowerMethod,
+                powersort::DefaultInsertionSort,
+                powersort::DefaultMultiMergingMethod,
+                powersort::DefaultBufGuardFactory,
+                8,
+                { powersort::DEFAULT_MIN_RUN_LENGTH },
+                { powersort::DEFAULT_ONLY_INCREASING_RUNS },
+            >,
         ],
     }
 }

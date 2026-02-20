@@ -188,7 +188,7 @@ fn perform_experiment<
         let elapsed = now.elapsed();
 
         // NOTE: Skip first sample (behavior taken from original codebase)
-        if !run == 0 {
+        if run != 0 {
             sampler(&mut initial, elapsed);
             bar.inc(1);
         }

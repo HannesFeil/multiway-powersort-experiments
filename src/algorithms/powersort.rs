@@ -196,6 +196,7 @@ impl<
 
     fn parameters() -> impl Iterator<Item = (&'static str, String)> {
         vec![
+            ("K", MERGE_K_RUNS.to_string()),
             ("node-power", N::display()),
             ("i-sort", super::display_inline::<I>()),
             ("merging", M::display()),
