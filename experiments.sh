@@ -33,7 +33,7 @@ run_sorts() {
 
   ${BINARY} --runs ${runs} --size ${n} --seed ${SEED} powersort ${d} -v 0 "${OUTPUT}/powersort-${file_suffix}"
 
-  # ${BINARY} --runs ${runs} --size ${n} --seed ${SEED} multiway-powersort ${d} -v 0 "${OUTPUT}/multiway-powersort-${file_suffix}"
+  ${BINARY} --runs ${runs} --size ${n} --seed ${SEED} multiway-powersort ${d} -v 0 "${OUTPUT}/multiway-powersort-${file_suffix}"
 }
 
 echo "Experiment 1: int, random runs, various n"
