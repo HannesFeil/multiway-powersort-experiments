@@ -90,7 +90,7 @@ impl<const K: usize> MultiMergingMethod<K> for TournamentTree {
             let runs = &mut guard.runs;
             let output = &mut guard.output;
 
-            Self::tournament_tree_merge(runs, output, slice.len());
+            Self::tournament_tree_merge(runs, output);
 
             debug_assert!(guard.is_empty());
             guard.disarm();
@@ -102,7 +102,6 @@ impl TournamentTree {
     unsafe fn tournament_tree_merge<T: Ord, const K: usize>(
         runs: &mut [super::Run<T>; K],
         output: &mut super::Run<T>,
-        n: usize,
     ) {
         let compare = |a: &(usize, Option<*mut T>), b: &(usize, Option<*mut T>)| unsafe {
             match (a.1, b.1) {
@@ -134,7 +133,7 @@ impl TournamentTree {
         }
 
         unsafe {
-            for _ in 0..n {
+            for _ in 0..output.len() {
                 let run_index = nodes[0].0;
                 let run = &mut runs[run_index];
                 run.copy_nonoverlapping_prefix_to(output, 1);
@@ -153,6 +152,118 @@ impl TournamentTree {
 
                     nodes[node_index] = min;
                 }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Fourway;
+
+impl MultiMergingMethod<4> for Fourway {
+    const IS_STABLE: bool = true;
+
+    fn display() -> String {
+        "fourway".to_string()
+    }
+
+    fn merge<T: Ord>(
+        slice: &mut [T],
+        run_lengths: &[usize],
+        buffer: &mut [std::mem::MaybeUninit<T>],
+    ) {
+        if slice.is_empty() {
+            return;
+        }
+
+        #[cfg(feature = "counters")]
+        {
+            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
+            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+        }
+
+        assert!(
+            buffer.len() >= slice.len(),
+            "Buffer needs to have at least the size of slice"
+        );
+        assert!(
+            (run_lengths).iter().sum::<usize>() <= slice.len(),
+            "Split points need to be in bounds"
+        );
+
+        let buffer = &mut buffer[..slice.len()];
+
+        // TODO: safety comment
+        unsafe {
+            // Copy entire slice into buffer
+            std::ptr::copy_nonoverlapping(
+                slice.as_ptr(),
+                buffer.as_mut_ptr() as *mut T,
+                slice.len(),
+            );
+
+            let ptr_range = buffer.as_mut_ptr_range();
+            let mut run_end = ptr_range.start;
+            let runs: [_; 4] = std::array::from_fn(|i| {
+                let run_start = run_end;
+                run_end = run_lengths
+                    .get(i)
+                    .map(|len| run_start.add(*len))
+                    .unwrap_or(ptr_range.end);
+
+                super::Run(run_start..run_end).assume_init()
+            });
+            let output = super::Run(slice.as_mut_ptr_range());
+
+            // SAFETY: all runs are readable valid subslices and output is writable and large
+            // enough for all elements in slice.
+            let mut guard = super::MergingDropGuard::new(runs, output);
+
+            let runs = &mut guard.runs;
+            let output = &mut guard.output;
+
+            Self::merge(runs, output);
+
+            debug_assert!(guard.is_empty());
+            guard.disarm();
+        }
+    }
+}
+
+impl Fourway {
+    unsafe fn merge<T: Ord>(runs: &mut [super::Run<T>; 4], output: &mut super::Run<T>) {
+        unsafe fn min_run<T: Ord>(
+            index_a: usize,
+            index_b: usize,
+            runs: &[super::Run<T>; 4],
+        ) -> usize {
+            unsafe {
+                if runs[index_b].is_empty() {
+                    index_a
+                } else if runs[index_a].is_empty() {
+                    index_b
+                } else if *runs[index_a].start() <= *runs[index_b].start() {
+                    index_a
+                } else {
+                    index_b
+                }
+            }
+        }
+
+        unsafe {
+            let mut left = min_run(0, 1, runs);
+            let mut right = min_run(2, 3, runs);
+            let mut root = min_run(left, right, runs);
+
+            for _ in 0..output.len() {
+                runs[root].copy_nonoverlapping_prefix_to(output, 1);
+
+                if root < 2 {
+                    left = min_run(0, 1, runs);
+                } else {
+                    right = min_run(2, 3, runs);
+                }
+                root = min_run(left, right, runs);
             }
         }
     }
@@ -227,6 +338,7 @@ mod tests {
 
     test_multi_methods! {
         TournamentTree: [2, 3, 4, 5, 6, 7, 8],
+        Fourway: [4],
     }
 
     /// Test merging an empty slice
