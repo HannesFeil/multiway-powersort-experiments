@@ -30,6 +30,8 @@ pub mod util {
         Ok(None)
     }
 
+    // TODO: update comments
+
     /// Returns the largest `index`, such that `slice[..index]` is weakly increasing
     pub fn weakly_increasing_prefix_index<T: Ord>(slice: &[T]) -> usize {
         let iter = slice.iter().enumerate();
@@ -38,7 +40,7 @@ pub mod util {
         match find_first_sequentially(iter, |(_, current), (_, next)| current > next) {
             // Found the index
             Ok(Some((index, _))) => index + 1,
-            // Sequence is not found, split into full and empty slice
+            // Sequence is not broken, split into full and empty slice
             Ok(None) => slice.len(),
             // Slice is empty, split into two empty slices
             Err(()) => 0,
@@ -53,8 +55,8 @@ pub mod util {
         match find_first_sequentially(iter, |(_, current), (_, previous)| current < previous) {
             // Found the index
             Ok(Some((index, _))) => index,
-            // Sequence is not found, split into full and empty slice
-            Ok(None) => slice.len(),
+            // Sequence is not broken, split into empty and full slice
+            Ok(None) => 0,
             // Slice is empty, split into two empty slices
             Err(()) => 0,
         }
@@ -68,7 +70,7 @@ pub mod util {
         match find_first_sequentially(iter, |(_, current), (_, next)| current <= next) {
             // Found the index
             Ok(Some((index, _))) => index + 1,
-            // Sequence is not found, split into full and empty slice
+            // Sequence is not broken, split into full and empty slice
             Ok(None) => slice.len(),
             // Slice is empty, split into two empty slices
             Err(()) => 0,
@@ -83,12 +85,14 @@ pub mod util {
         match find_first_sequentially(iter, |(_, current), (_, previous)| current >= previous) {
             // Found the index
             Ok(Some((index, _))) => index,
-            // Sequence is not found, split into full and empty slice
-            Ok(None) => slice.len(),
+            // Sequence is not found, split into empty and full slice
+            Ok(None) => 0,
             // Slice is empty, split into two empty slices
             Err(()) => 0,
         }
     }
+
+    // TODO: add returned enum
 
     /// Returns the largest (`index`, `decreasing`), such that `slice[index..]` is weakly increasing or
     /// strictly decreasing. `decreasing` indicating if the found sequence is strictly decreasing.
