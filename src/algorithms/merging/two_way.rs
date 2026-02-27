@@ -37,9 +37,17 @@ impl MergingMethod for CopyBoth {
         }
 
         #[cfg(feature = "counters")]
+        #[allow(
+            clippy::as_conversions,
+            reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
+        )]
         {
-            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
-            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_slice
+                .increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_buffer
+                .increase(slice.len() as u64);
         }
 
         assert!(
@@ -125,11 +133,15 @@ impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
             return;
         }
 
-        // TODO: improve this?
+        // FIXME: this is inaccurate
         #[cfg(feature = "counters")]
+        #[allow(
+            clippy::as_conversions,
+            reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
+        )]
         {
-            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
-            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS.merge_slice.increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS.merge_buffer.increase(slice.len() as u64);
         }
 
         let start = Self::gallop::<T, false>(&slice[run_length], &slice[..run_length], 0);

@@ -140,8 +140,6 @@ impl GlobalCounter {
     }
 }
 
-pub static COMPARISON_COUNTER: GlobalCounter = GlobalCounter::new();
-
 #[allow(dead_code)]
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -150,7 +148,7 @@ pub struct CountComparisons<T>(T);
 #[allow(dead_code)]
 impl<T> CountComparisons<T> {
     fn increase_counter(amount: u64) {
-        COMPARISON_COUNTER.increase(amount);
+        crate::GLOBAL_COUNTERS.comparisons.increase(amount);
     }
 }
 

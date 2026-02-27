@@ -45,9 +45,17 @@ impl<const K: usize> MultiMergingMethod<K> for TournamentTree {
         }
 
         #[cfg(feature = "counters")]
+        #[allow(
+            clippy::as_conversions,
+            reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
+        )]
         {
-            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
-            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_slice
+                .increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_buffer
+                .increase(slice.len() as u64);
         }
 
         assert!(
@@ -176,10 +184,17 @@ impl MultiMergingMethod<4> for Fourway {
             return;
         }
 
-        #[cfg(feature = "counters")]
+        #[allow(
+            clippy::as_conversions,
+            reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
+        )]
         {
-            super::MERGE_SLICE_COUNTER.increase(slice.len() as u64);
-            super::MERGE_BUFFER_COUNTER.increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_slice
+                .increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_buffer
+                .increase(slice.len() as u64);
         }
 
         assert!(
