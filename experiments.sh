@@ -77,3 +77,9 @@ run_sorts 1001    100000 random-runs-sqrt-u32 times-runs-int-cmp-e5 >> ${OUTPUT}
 run_sorts 1001   1000000 random-runs-sqrt-u32 times-runs-int-cmp-e6 >> ${OUTPUT}/times-runs-cmps.out
 run_sorts  101  10000000 random-runs-sqrt-u32 times-runs-int-cmp-e7 >> ${OUTPUT}/times-runs-cmps.out
 run_sorts  101 100000000 random-runs-sqrt-u32 times-runs-int-cmp-e8 >> ${OUTPUT}/times-runs-cmps.out
+
+run_sorts 1001     10000 permutation-u32 times-rp-int-cmp-e4 >> ${OUTPUT}/times-rp-cmps.out
+run_sorts 1001    100000 permutation-u32 times-rp-int-cmp-e5 >> ${OUTPUT}/times-rp-cmps.out
+run_sorts 1001   1000000 permutation-u32 times-rp-int-cmp-e6 >> ${OUTPUT}/times-rp-cmps.out
+run_sorts  101  10000000 permutation-u32 times-rp-int-cmp-e7 >> ${OUTPUT}/times-rp-cmps.out
+run_sorts  101 100000000 permutation-u32 times-rp-int-cmp-e8 >> ${OUTPUT}/times-rp-cmps.out
