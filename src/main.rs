@@ -193,7 +193,7 @@ fn perform_experiment<
             bar.inc(1);
         }
 
-        debug_assert!(
+        assert!(
             data.is_sorted(),
             "{data:?} is not sorted after algorithm run"
         );
