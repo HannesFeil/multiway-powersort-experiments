@@ -1,4 +1,4 @@
-//! Contains various structs intended for testing purposes
+//! Contains various structs and functions intended for testing purposes.
 
 use rand::{Rng as _, SeedableRng as _, seq::SliceRandom as _};
 
@@ -9,7 +9,7 @@ pub const DEFAULT_RUNS: usize = 100;
 
 /// The seed shared by all tests
 pub const TEST_SEED: u64 = 0xa8bf17eb656f828d;
-/// The rng used by each test
+/// The RNG used by each test
 pub type Rng = rand::rngs::SmallRng;
 
 /// Generate the `Rng` for a test
@@ -17,12 +17,15 @@ pub fn test_rng() -> Rng {
     Rng::seed_from_u64(TEST_SEED)
 }
 
-/// A unit struct that returns a random ordering when compared
+/// A unit struct that returns a random ordering when compared.
+///
+/// Intended to simulate a badly behaving [`Ord`] implementation.
 #[derive(Debug, Clone)]
 pub struct RandomOrdered(std::rc::Rc<std::cell::RefCell<rand::rngs::SmallRng>>);
 
 impl RandomOrdered {
-    /// Create a new [`Iterator`] of RandomOrdered, created with a shared [`rand::rngs::SmallRng`]
+    /// Create a new endless [`Iterator`] of RandomOrdered, created with a shared
+    /// [`rand::rngs::SmallRng`].
     pub fn new_iter(seed: u64) -> impl Iterator<Item = Self> {
         let rng = std::rc::Rc::new(std::cell::RefCell::new(
             rand::rngs::SmallRng::seed_from_u64(seed),
@@ -31,6 +34,8 @@ impl RandomOrdered {
         std::iter::repeat_with(move || RandomOrdered(rng.clone()))
     }
 }
+
+// The following implementations are intentionally 'bad' (see RandomOrdered)
 
 impl PartialEq for RandomOrdered {
     fn eq(&self, _other: &Self) -> bool {
@@ -57,7 +62,9 @@ impl Ord for RandomOrdered {
     }
 }
 
-/// A struct that panicks with the likelihood of `1 / LIKELIHOOD` when compared.
+/// A Wrapper that panics with the likelihood of `1 / LIKELIHOOD` when being compared.
+///
+/// Intended to check for undefined behavior when panicking occurs during merging.
 #[derive(Debug, Clone)]
 pub struct MaybePanickingOrdered<const LIKELIHOOD: usize, T: Ord>(
     std::rc::Rc<std::cell::RefCell<rand::rngs::SmallRng>>,
@@ -65,7 +72,7 @@ pub struct MaybePanickingOrdered<const LIKELIHOOD: usize, T: Ord>(
 );
 
 impl<const LIKELIHOOD: usize, T: Ord> MaybePanickingOrdered<LIKELIHOOD, T> {
-    /// Map an [`Iterator`] of `T` to `Self` with a shared [`rand::rngs::SmallRng`]
+    /// Map an [`Iterator`] of `T` to `Self` with a shared [`rand::rngs::SmallRng`].
     pub fn map_iter(iter: impl Iterator<Item = T>, seed: u64) -> impl Iterator<Item = Self> {
         let rng = std::rc::Rc::new(std::cell::RefCell::new(
             rand::rngs::SmallRng::seed_from_u64(seed),
@@ -74,6 +81,8 @@ impl<const LIKELIHOOD: usize, T: Ord> MaybePanickingOrdered<LIKELIHOOD, T> {
         iter.map(move |element| Self(rng.clone(), element))
     }
 }
+
+// The following implementations are intentionally 'bad' (see RandomOrdered)
 
 impl<const LIKELIHOOD: usize, T: Ord> PartialEq for MaybePanickingOrdered<LIKELIHOOD, T> {
     fn eq(&self, other: &Self) -> bool {
@@ -101,38 +110,49 @@ impl<const LIKELIHOOD: usize, T: Ord> Ord for MaybePanickingOrdered<LIKELIHOOD, 
     }
 }
 
-/// A Wrapper struct that tracks an original index with an ordered element,
-/// used to test sort results for stability
+/// A Wrapper struct that tracks an original index with an ordered element.
+///
+/// Intended to test sort results for stability.
+///
+/// When compared, the call is intentionally forwarded to the implementation of `T`.
+/// To check for stable sorting, see [`Self::is_stable_sorted()`]
 #[derive(Debug, Clone)]
 pub struct IndexedOrdered<T: Ord>(usize, T);
 
 impl<T: Ord> IndexedOrdered<T> {
-    /// Create a new iterator of `IndexedOrdered`, tracking the position of each element in `iter`
+    /// Create a new iterator of `IndexedOrdered`, tracking the position of each element in `iter`.
     pub fn map_iter(iter: impl Iterator<Item = T>) -> impl Iterator<Item = Self> {
         iter.enumerate()
             .map(|(index, element)| Self(index, element))
     }
 
-    /// Check `slice` is sorted and check for stability, e.g. equal elements keeping initial ordering.
-    pub fn is_stable_sorted(slice: &[Self]) -> bool {
-        if slice.len() < 2 {
-            return true;
-        }
+    /// Check `iter` is sorted and check for stability, e.g. equal elements keeping their initial
+    /// relative ordering.
+    ///
+    /// Returns `Ok(result)` if `iter` is sorted with regards to `T` where `result` indicates if
+    /// the sort is stable. Otherwise, returns `Err(())` if `iter` was not sorted with regards to
+    /// `T`.
+    pub fn is_stable_sorted<'a>(mut iter: impl Iterator<Item = &'a Self>) -> Result<bool, ()>
+    where
+        T: 'a,
+    {
+        let Some(mut previous) = iter.next() else {
+            return Ok(true);
+        };
 
-        let mut previous = &slice[0];
-        for current in slice[1..].iter() {
+        for current in iter {
             match current.cmp(previous) {
                 // Slice is not sorted
-                std::cmp::Ordering::Less => return false,
+                std::cmp::Ordering::Less => return Err(()),
                 // Elements are not stable
-                std::cmp::Ordering::Equal if current.0 < previous.0 => return false,
+                std::cmp::Ordering::Equal if current.0 < previous.0 => return Ok(false),
                 _ => {}
             }
 
             previous = current;
         }
 
-        true
+        Ok(true)
     }
 }
 
@@ -165,19 +185,31 @@ pub fn test_empty<S: crate::algorithms::Sort>() {
 pub fn test_random_sorted<const RUNS: usize, const TEST_SIZE: usize, S: crate::algorithms::Sort>() {
     let mut rng = test_rng();
 
-    let mut values: Box<[usize]> = (0..TEST_SIZE).collect();
+    // Random permutations
+    let permutation_values: Box<[usize]> = (0..TEST_SIZE).collect();
+    // Random permutations with repeat elements
+    let repeat_permutation_values: Box<[usize]> =
+        std::iter::repeat_n(0..TEST_SIZE / 4, 4).flatten().collect();
 
-    for run in 0..RUNS {
-        values.shuffle(&mut rng);
-        S::sort(&mut values);
-        assert!(values.is_sorted(), "Run {run} was not sorted");
-    }
+    for mut values in [permutation_values, repeat_permutation_values] {
+        // Check slices of size TEST_SIZE
+        for run in 0..RUNS {
+            values.shuffle(&mut rng);
 
-    let mut values: Box<[usize]> = std::iter::repeat_n(0..TEST_SIZE / 4, 4).flatten().collect();
-    for run in 0..RUNS {
-        values.shuffle(&mut rng);
-        S::sort(&mut values);
-        assert!(values.is_sorted(), "Run {run} was not sorted");
+            S::sort(&mut values);
+
+            assert!(values.is_sorted(), "Run {run} was not sorted");
+        }
+
+        // Check smaller slices
+        for run in 0..RUNS {
+            let values = &mut values[..rng.random_range(0..TEST_SIZE)];
+            values.shuffle(&mut rng);
+
+            S::sort(values);
+
+            assert!(values.is_sorted(), "Run {run} was not sorted");
+        }
     }
 }
 
@@ -190,6 +222,8 @@ pub fn test_random_stable_sorted<
     assert!(S::IS_STABLE);
 
     let mut rng = test_rng();
+
+    // Random permutations with repeat elements
     let mut values: Box<[usize]> = std::iter::repeat_n(0..TEST_SIZE / 4, 4).flatten().collect();
     let mut ordered_values: Box<[IndexedOrdered<usize>]>;
 
@@ -197,9 +231,22 @@ pub fn test_random_stable_sorted<
         values.shuffle(&mut rng);
         ordered_values = IndexedOrdered::map_iter(values.iter().copied()).collect();
         S::sort(&mut ordered_values);
-        assert!(
-            IndexedOrdered::is_stable_sorted(&ordered_values),
-            "Run {run} was not stable sorted"
-        );
+
+        match IndexedOrdered::is_stable_sorted(ordered_values.iter()) {
+            Ok(stable) => assert!(stable, "Elements in {run} were not sorted stable"),
+            Err(()) => panic!("Elements in run {run} were not sorted at all"),
+        }
+    }
+
+    for run in 0..RUNS {
+        let values = &mut values[..rng.random_range(0..TEST_SIZE)];
+        values.shuffle(&mut rng);
+        ordered_values = IndexedOrdered::map_iter(values.iter().copied()).collect();
+        S::sort(&mut ordered_values);
+
+        match IndexedOrdered::is_stable_sorted(ordered_values.iter()) {
+            Ok(stable) => assert!(stable, "Elements in {run} were not sorted stable"),
+            Err(()) => panic!("Elements in run {run} were not sorted at all"),
+        }
     }
 }

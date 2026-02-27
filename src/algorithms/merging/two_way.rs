@@ -53,10 +53,10 @@ impl MergingMethod for CopyBoth {
 
         let buffer = &mut buffer[..slice.len()];
 
-        // FIXME: this comment is outdated
+        // FIXME: this comment is outdated.
         // SAFETY: We make sure to copy each element from left and right into buffer exactly once,
-        // so that buffer ends up a permutation (sorted) of slice. Therefor at the end we may
-        // assume slice.len() elements in buffer are initialized and may be copied back into slice
+        // so that buffer ends up a permutation (sorted) of slice. Therefor at the end we may assume
+        // `slice.len()` elements in buffer are initialized and may be copied back into slice.
         // without duplication.
         unsafe {
             // Copy entire slice into buffer
@@ -73,7 +73,7 @@ impl MergingMethod for CopyBoth {
             ];
             let output = super::Run(slice.as_mut_ptr_range());
 
-            // SAFETY: all runs are readable valid subslices and output is writable and large
+            // SAFETY: all runs are readable valid sub-slices and output is writable and large
             // enough for all elements in slice.
             let mut guard = super::MergingDropGuard::new(runs, output);
 
@@ -183,7 +183,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
         let (cmp, cmp_negated): (Comparator<T>, Comparator<T>) =
             if LEFT { (T::gt, T::le) } else { (T::ge, T::lt) };
 
-        // check if we're searching slice[..hint] or slice[hint..]
+        // Check if we're searching `slice[..hint]` or `slice[hint..]`
         if cmp(key, &slice[hint]) {
             // Use quadratic search to find the containing interval
             let max_offset = slice.len() - hint;
@@ -193,7 +193,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             }
             offset = std::cmp::min(offset, max_offset);
 
-            // Since we searched slice[hint..] we have to add it as starting offset
+            // Since we searched `slice[hint..]` we have to add it as starting offset
             last_offset += hint + 1;
             offset += hint;
         } else {
@@ -205,7 +205,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             }
             offset = std::cmp::min(offset, max_offset);
 
-            // Since we searched slice[..hint] backwards, we reverse our offset
+            // Since we searched `slice[..hint]` backwards, we reverse our offset
             let tmp = last_offset;
             last_offset = hint + 1 - offset;
             offset = hint - tmp;
@@ -531,7 +531,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
     }
 }
 
-// TODO: refactor pls
+// TODO: refactor please
 #[cfg(test)]
 mod tests {
     use super::super::BufGuard;
@@ -651,7 +651,8 @@ mod tests {
             T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
 
             assert!(
-                crate::test::IndexedOrdered::is_stable_sorted(&elements),
+                crate::test::IndexedOrdered::is_stable_sorted(elements.iter())
+                    .is_ok_and(std::convert::identity),
                 "Resulting elements were not sorted by {name} in run {run}\n{elements:?}",
                 name = std::any::type_name::<T>(),
             );
@@ -669,7 +670,8 @@ mod tests {
             T::merge(&mut elements, split, buffer.as_uninit_slice_mut());
 
             assert!(
-                crate::test::IndexedOrdered::is_stable_sorted(&elements),
+                crate::test::IndexedOrdered::is_stable_sorted(elements.iter())
+                    .is_ok_and(std::convert::identity),
                 "Resulting elements were not sorted by {name} with split {split}\n{elements:?}",
                 name = std::any::type_name::<T>(),
             );

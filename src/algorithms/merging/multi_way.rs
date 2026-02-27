@@ -1,6 +1,6 @@
 // TODO: sentinel check (move right and continue?)
 
-/// Specifies ways to merge tup to `K` adjacent runs in a slice, given a buffer
+/// Specifies ways to merge up to `K` adjacent runs in a slice, given a buffer
 pub trait MultiMergingMethod<const K: usize> {
     /// Whether the merging method is stable
     const IS_STABLE: bool;
@@ -83,7 +83,7 @@ impl<const K: usize> MultiMergingMethod<K> for TournamentTree {
             });
             let output = super::Run(slice.as_mut_ptr_range());
 
-            // SAFETY: all runs are readable valid subslices and output is writable and large
+            // SAFETY: all runs are readable valid sub-slices and output is writable and large
             // enough for all elements in slice.
             let mut guard = super::MergingDropGuard::new(runs, output);
 
@@ -215,7 +215,7 @@ impl MultiMergingMethod<4> for Fourway {
             });
             let output = super::Run(slice.as_mut_ptr_range());
 
-            // SAFETY: all runs are readable valid subslices and output is writable and large
+            // SAFETY: all runs are readable valid sub-slices and output is writable and large
             // enough for all elements in slice.
             let mut guard = super::MergingDropGuard::new(runs, output);
 
@@ -269,7 +269,7 @@ impl Fourway {
     }
 }
 
-// TODO: refactor pls
+// TODO: refactor please
 #[cfg(test)]
 mod tests {
     use super::super::BufGuard;
@@ -346,7 +346,7 @@ mod tests {
         let mut elements = [(); 0];
         let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
 
-        // This should not panic nor cause UB
+        // This should not panic nor cause Undefined Behavior
         T::merge(&mut elements, &[], buffer.as_uninit_slice_mut())
     }
 
@@ -436,7 +436,8 @@ mod tests {
             T::merge(&mut elements, &splits, buffer.as_uninit_slice_mut());
 
             assert!(
-                crate::test::IndexedOrdered::is_stable_sorted(&elements),
+                crate::test::IndexedOrdered::is_stable_sorted(elements.iter())
+                    .is_ok_and(std::convert::identity),
                 "Resulting elements were not sorted by {name} in run {run}\n{elements:?}",
                 name = std::any::type_name::<T>(),
             );
@@ -463,7 +464,8 @@ mod tests {
             T::merge(&mut elements, &splits, buffer.as_uninit_slice_mut());
 
             assert!(
-                crate::test::IndexedOrdered::is_stable_sorted(&elements),
+                crate::test::IndexedOrdered::is_stable_sorted(elements.iter())
+                    .is_ok_and(std::convert::identity),
                 "Resulting elements were not sorted by {name} with split {split}\n{elements:?}",
                 name = std::any::type_name::<T>(),
             );
@@ -471,7 +473,7 @@ mod tests {
     }
 
     /// Run Merging methods with [`crate::test::RandomOrdered`] elements and
-    /// [`crate::test::MaybePanickingOrdered`] elements, mostly useful for running under miri
+    /// [`crate::test::MaybePanickingOrdered`] elements, mostly useful for running under MIRI
     fn test_soundness_merge<T: MultiMergingMethod<K>, const K: usize>() {
         let mut rng = crate::test::test_rng();
         let mut buffer = <Vec<_> as BufGuard<_>>::with_capacity(T::required_capacity(TEST_SIZE));
