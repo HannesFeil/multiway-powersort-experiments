@@ -63,9 +63,9 @@ impl<
         // Delegate to helper function
         Self::peeksort(
             slice,
-            buffer.as_uninit_slice_mut(),
             split_point,
             slice.len() - 1,
+            buffer.as_uninit_slice_mut(),
         );
     }
 }
@@ -84,9 +84,9 @@ impl<
     /// `slice[right_run_begin..]` are already sorted.
     fn peeksort<T: Ord>(
         slice: &mut [T],
-        buffer: &mut [std::mem::MaybeUninit<T>],
         left_run_end: usize,
         right_run_begin: usize,
+        buffer: &mut [std::mem::MaybeUninit<T>],
     ) {
         // Assert invariant in debug build
         debug_assert!(slice[..left_run_end].is_sorted() && slice[right_run_begin..].is_sorted());
@@ -106,17 +106,17 @@ impl<
         if middle <= left_run_end {
             Self::peeksort(
                 &mut slice[left_run_end..],
-                buffer,
                 1,
                 right_run_begin - left_run_end,
+                buffer,
             );
             M::merge(slice, left_run_end, buffer);
         } else if middle >= right_run_begin {
             Self::peeksort(
                 &mut slice[..right_run_begin],
-                buffer,
                 left_run_end,
                 right_run_begin - 1,
+                buffer,
             );
             M::merge(slice, right_run_begin, buffer);
         } else {
@@ -164,12 +164,12 @@ impl<
             }
 
             if middle - i < j - middle {
-                Self::peeksort(&mut slice[..i], buffer, left_run_end, i - 1);
-                Self::peeksort(&mut slice[i..], buffer, j - i, right_run_begin - i);
+                Self::peeksort(&mut slice[..i], left_run_end, i - 1, buffer);
+                Self::peeksort(&mut slice[i..], j - i, right_run_begin - i, buffer);
                 M::merge(slice, i, buffer);
             } else {
-                Self::peeksort(&mut slice[..j], buffer, left_run_end, i);
-                Self::peeksort(&mut slice[j..], buffer, 1, right_run_begin - j);
+                Self::peeksort(&mut slice[..j], left_run_end, i, buffer);
+                Self::peeksort(&mut slice[j..], 1, right_run_begin - j, buffer);
                 M::merge(slice, j, buffer);
             }
         }
