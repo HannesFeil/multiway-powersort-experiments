@@ -158,11 +158,6 @@ impl<
                 }
             }
 
-            // NOTE: is the j comparison necessary?
-            if i == 0 && j == slice.len() {
-                return;
-            }
-
             if middle - i < j - middle {
                 Self::peeksort(&mut slice[..i], left_run_end, i - 1, buffer);
                 Self::peeksort(&mut slice[i..], j - i, right_run_begin - i, buffer);
