@@ -45,7 +45,7 @@ impl<const K: usize> MultiMergingMethod<K> for TournamentTree {
         }
 
         #[cfg(feature = "counters")]
-        #[allow(
+        #[expect(
             clippy::as_conversions,
             reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
         )]
@@ -184,7 +184,7 @@ impl MultiMergingMethod<4> for Fourway {
             return;
         }
 
-        #[allow(
+        #[expect(
             clippy::as_conversions,
             reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
         )]

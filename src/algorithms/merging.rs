@@ -124,7 +124,7 @@ pub trait BufGuard<T> {
 impl<T> BufGuard<T> for Vec<T> {
     fn with_capacity(capacity: usize) -> Self {
         #[cfg(feature = "counters")]
-        #[allow(
+        #[expect(
             clippy::as_conversions,
             reason = "This will always be accurate (capacity will not realistically be too high)"
         )]
