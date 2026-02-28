@@ -8,30 +8,6 @@ pub mod powersort;
 pub mod quicksort;
 pub mod timsort;
 
-/// Return the multi line display representation of a sort
-pub fn display<S: Sort>() -> String {
-    format!(
-        "{base}\n{parameters}",
-        base = S::BASE_NAME,
-        parameters = S::parameters()
-            .map(|(key, value)| format!("\t{key} = {value}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    )
-}
-
-/// Return the inline display representation of a sort
-pub fn display_inline<S: Sort>() -> String {
-    format!(
-        "{base} {parameters}",
-        base = S::BASE_NAME,
-        parameters = S::parameters()
-            .map(|(key, value)| format!("({key} = {value})"))
-            .collect::<Vec<_>>()
-            .join(" ")
-    )
-}
-
 /// A trait to simplify the algorithm definitions
 pub trait Sort {
     /// Whether [`Self::sort`] preserves the order of equal elements

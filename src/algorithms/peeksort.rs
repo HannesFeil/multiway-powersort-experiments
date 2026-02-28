@@ -44,7 +44,7 @@ impl<
 
     fn parameters() -> impl Iterator<Item = (&'static str, String)> {
         vec![
-            ("i-sort", super::display_inline::<I>()),
+            ("i-sort", crate::cli::display_inline::<I>()),
             ("merging", M::display()),
             ("i-threshold", INSERTION_THRESHOLD.to_string()),
             ("only-increasing", ONLY_INCREASING_RUNS.to_string()),

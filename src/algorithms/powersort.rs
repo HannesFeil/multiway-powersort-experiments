@@ -67,7 +67,7 @@ impl<
     fn parameters() -> impl Iterator<Item = (&'static str, String)> {
         vec![
             ("node-power", N::display()),
-            ("i-sort", super::display_inline::<I>()),
+            ("i-sort", crate::cli::display_inline::<I>()),
             ("merging", M::display()),
             ("min-run-len", MIN_RUN_LENGTH.to_string()),
             ("only-increasing", ONLY_INCREASING_RUNS.to_string()),
@@ -198,7 +198,7 @@ impl<
         vec![
             ("K", MERGE_K_RUNS.to_string()),
             ("node-power", N::display()),
-            ("i-sort", super::display_inline::<I>()),
+            ("i-sort", crate::cli::display_inline::<I>()),
             ("merging", M::display()),
             ("min-run-len", MIN_RUN_LENGTH.to_string()),
             ("only-increasing", ONLY_INCREASING_RUNS.to_string()),

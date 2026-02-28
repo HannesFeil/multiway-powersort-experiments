@@ -38,7 +38,7 @@ impl<
 
     fn parameters() -> impl Iterator<Item = (&'static str, String)> {
         vec![
-            ("i-sort", super::display_inline::<I>()),
+            ("i-sort", crate::cli::display_inline::<I>()),
             ("i-threshold", INSERTION_THRESHOLD.to_string()),
             ("ninther-threshold", NINTHER_THRESHOLD.to_string()),
             ("check-sorted", CHECK_SORTED.to_string()),

@@ -39,7 +39,7 @@ impl<
 
     fn parameters() -> impl Iterator<Item = (&'static str, String)> {
         vec![
-            ("i-sort", super::display_inline::<I>()),
+            ("i-sort", crate::cli::display_inline::<I>()),
             ("merging", M::display()),
             ("min-merge", MIN_MERGE.to_string()),
         ]
