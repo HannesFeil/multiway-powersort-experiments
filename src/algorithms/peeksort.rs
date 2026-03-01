@@ -36,7 +36,7 @@ impl<
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const ONLY_INCREASING_RUNS: bool,
-> super::PostfixSort for PeekSort<I, M, B, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>
+> super::Sort for PeekSort<I, M, B, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>
 {
     const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
 
@@ -52,7 +52,20 @@ impl<
         .into_iter()
     }
 
-    fn sort<T: Ord>(slice: &mut [T], split_point: usize) {
+    fn sort<T: Ord>(slice: &mut [T]) {
+        <Self as super::PostfixSort>::sort_with_sorted_prefix(slice, 1);
+    }
+}
+
+impl<
+    I: super::Sort,
+    M: super::merging::two_way::MergingMethod,
+    B: super::BufGuardFactory,
+    const INSERTION_THRESHOLD: usize,
+    const ONLY_INCREASING_RUNS: bool,
+> super::PostfixSort for PeekSort<I, M, B, INSERTION_THRESHOLD, ONLY_INCREASING_RUNS>
+{
+    fn sort_with_sorted_prefix<T: Ord>(slice: &mut [T], split_point: usize) {
         if slice.len() < 2 {
             return;
         }

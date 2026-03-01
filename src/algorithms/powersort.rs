@@ -154,7 +154,7 @@ impl<
         if run.len() < MIN_RUN_LENGTH {
             let end = std::cmp::min(slice.len(), start + MIN_RUN_LENGTH);
 
-            I::sort(&mut slice[start..end], run.len());
+            I::sort_with_sorted_prefix(&mut slice[start..end], run.len());
 
             start..end
         } else {
@@ -317,7 +317,7 @@ impl<
         if run.len() < MIN_RUN_LENGTH {
             let end = std::cmp::min(slice.len(), start + MIN_RUN_LENGTH);
 
-            I::sort(&mut slice[start..end], run.len());
+            I::sort_with_sorted_prefix(&mut slice[start..end], run.len());
 
             start..end
         } else {

@@ -75,7 +75,7 @@ impl<
 
         if slice.len() < MIN_MERGE {
             let split_point = Self::count_run_and_make_ascending(slice);
-            I::sort(slice, split_point);
+            I::sort_with_sorted_prefix(slice, split_point);
             return;
         }
 
@@ -91,7 +91,7 @@ impl<
 
             if run_length < min_run {
                 let force = std::cmp::min(n, min_run);
-                I::sort(&mut slice[start..start + force], run_length);
+                I::sort_with_sorted_prefix(&mut slice[start..start + force], run_length);
                 run_length = force;
             }
 

@@ -8,7 +8,7 @@ pub mod powersort;
 pub mod quicksort;
 pub mod timsort;
 
-/// A trait to simplify the algorithm definitions
+/// A sorting algorithm
 pub trait Sort {
     /// Whether [`Self::sort`] preserves the order of equal elements
     const IS_STABLE: bool;
@@ -16,44 +16,22 @@ pub trait Sort {
     /// The base algorithm name
     const BASE_NAME: &str;
 
-    /// String representation of the parameters
+    /// Returns an iterator over the algorithm parameters and their values.
     fn parameters() -> impl Iterator<Item = (&'static str, String)>;
 
-    /// Sort the given slice
+    /// Sorts the given slice.
     fn sort<T: Ord>(slice: &mut [T]);
 }
 
-/// Defines a Sort that expects slices with a first partition already sorted
-pub trait PostfixSort {
-    /// Whether [`Self::sort`] preserves the order of equal elements
-    const IS_STABLE: bool;
-
-    /// The base algorithm name
-    const BASE_NAME: &str;
-
-    /// String representation of the parameters
-    fn parameters() -> impl Iterator<Item = (&'static str, String)>;
-
-    /// Sort the given slice under the assumption, that `slice[..split_point]` is already sorted
-    fn sort<T: Ord>(slice: &mut [T], split_point: usize);
-}
-
-impl<S: PostfixSort> Sort for S {
-    const IS_STABLE: bool = Self::IS_STABLE;
-
-    const BASE_NAME: &str = Self::BASE_NAME;
-
-    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
-        Self::parameters()
-    }
-
-    fn sort<T: Ord>(slice: &mut [T]) {
-        if slice.is_empty() {
-            return;
-        }
-
-        Self::sort(slice, 1);
-    }
+/// A sorting algorithm that takes slices with a prefix partition already sorted
+pub trait PostfixSort: Sort {
+    /// Sort the given slice under the assumption, that `slice[..split_point]` is already sorted.
+    ///
+    /// # Invalid Input
+    ///
+    /// If `slice[..split_point]` is not sorted, this call may or may not panic and the result will
+    /// probably not be correctly sorted.
+    fn sort_with_sorted_prefix<T: Ord>(slice: &mut [T], split_point: usize);
 }
 
 /// The Standard library sort
@@ -77,12 +55,12 @@ impl<const STABLE: bool> Sort for StdSort<STABLE> {
     }
 }
 
-/// A trait for modulizing random number generation
+/// A trait to parameterize random number generation
 pub trait RandomFactory {
-    /// The [`rand::Rng`] produced by this factory
+    /// The [`rand::Rng`] type produced by this factory
     type Rng: rand::Rng;
 
-    /// Produce [`Self::Rng`]
+    /// Produces a new [`Self::Rng`].
     fn produce() -> Self::Rng;
 }
 
@@ -97,13 +75,16 @@ impl RandomFactory for DefaultRngFactory {
     }
 }
 
-/// A trait for modulizing [`merging::BufGuard`]s
+/// A trait to parameterize the creation of [`BufGuards`](merging::BufGuard).
+///
+/// This trait serves as a type level function to get a type implementing
+/// [`Bufguard<T>`](merging::Bufguard) for a given type `T`.
 pub trait BufGuardFactory {
-    /// The corresponding guard type
+    /// The associated guard type
     type Guard<T>: merging::BufGuard<T>;
 }
 
-/// The factory producing `Vec<T>` types
+/// The [`BufGuardFactory`] producing `Vec<T>` types
 pub struct DefaultBufGuardFactory;
 
 impl BufGuardFactory for DefaultBufGuardFactory {

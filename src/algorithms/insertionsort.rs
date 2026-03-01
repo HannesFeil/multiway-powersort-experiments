@@ -8,7 +8,7 @@ pub const DEFAULT_BINARY: bool = false;
 /// The insertion [`super::Sort`]
 pub struct InsertionSort<const BINARY: bool = DEFAULT_BINARY>;
 
-impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
+impl<const BINARY: bool> super::Sort for InsertionSort<BINARY> {
     const IS_STABLE: bool = true;
 
     const BASE_NAME: &str = "insertionsort";
@@ -17,7 +17,13 @@ impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
         vec![("binary", BINARY.to_string())].into_iter()
     }
 
-    fn sort<T: Ord>(slice: &mut [T], split_point: usize) {
+    fn sort<T: Ord>(slice: &mut [T]) {
+        <Self as super::PostfixSort>::sort_with_sorted_prefix(slice, 1);
+    }
+}
+
+impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
+    fn sort_with_sorted_prefix<T: Ord>(slice: &mut [T], split_point: usize) {
         if slice.len() < 2 {
             return;
         }
