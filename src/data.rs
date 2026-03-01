@@ -1,11 +1,14 @@
-//! Contains various structs used to measure differences and memory effects when being sorted
+//! Contains various structs used to measure differences when being sorted
 
 use rand::{distr::Distribution as _, seq::SliceRandom};
 
+/// Used to define ways to compare [`Blobs`](Blob)
 pub trait BlobComparisonMethod<T: Ord, const N: usize>: std::fmt::Debug {
+    /// Compares the data of two [`Blobs`](Blob)
     fn compare(a: &[T; N], b: &[T; N]) -> std::cmp::Ordering;
 }
 
+/// Compares two [`Blobs`](Blob) by comparing only their first entry
 #[derive(Debug, Clone, Copy)]
 pub struct CompareFirstEntry;
 
@@ -15,10 +18,12 @@ impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareFirstEntry {
     }
 }
 
+/// Compares two [`Blobs`](Blob) by comparing them in lexicographical order, e.g. comparing their
+/// first element and falling back to later elements on equality.
 #[derive(Debug, Clone, Copy)]
-pub struct CompareLexicographically;
+pub struct CompareLexicographical;
 
-impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareLexicographically {
+impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareLexicographical {
     fn compare(a: &[T; N], b: &[T; N]) -> std::cmp::Ordering {
         for (a, b) in a.iter().zip(b.iter()) {
             match a.cmp(b) {
@@ -31,6 +36,11 @@ impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareLexicographic
     }
 }
 
+/// Compares two [`Blobs`](Blob) by calculating and then comparing their hashes.
+///
+/// # Note
+///
+/// This method only works for [`Blobs`](Blob) of `u32`.
 #[derive(Debug, Clone, Copy)]
 pub struct CompareHash;
 
@@ -48,6 +58,7 @@ impl<const N: usize> BlobComparisonMethod<u32, N> for CompareHash {
     }
 }
 
+/// A data blob, being a small wrapper over and array along with a [`BlobComparisonMethod`].
 #[repr(transparent)]
 #[derive(Debug, Clone)]
 pub struct Blob<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize>(
@@ -55,6 +66,7 @@ pub struct Blob<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize>(
     std::marker::PhantomData<C>,
 );
 
+/// Prime numbers used for the creation of blobs (directly taken from the C++ implementation)
 const BLOB_PRIMES: [u32; 64] = [
     1073741827, 1073741831, 1073741833, 1073741839, 1073741843, 1073741857, 1073741891, 1073741909,
     1073741939, 1073741953, 1073741969, 1073741971, 1073741987, 1073741993, 1073742037, 1073742053,
@@ -89,7 +101,9 @@ impl<T: Ord + TryFrom<usize>, C: BlobComparisonMethod<T, N>, const N: usize> Try
 
         let mut elements: Vec<T> = vec![];
         for prime in BLOB_PRIMES.iter().copied().take(N) {
-            elements.push((value % prime as usize).try_into()?)
+            elements.push(
+                (value % usize::try_from(prime).expect("u32 should fit in a usize")).try_into()?,
+            )
         }
 
         Ok(Blob(
@@ -119,34 +133,42 @@ impl<T: Ord, C: BlobComparisonMethod<T, N>, const N: usize> Ord for Blob<T, C, N
     }
 }
 
-#[allow(dead_code)]
+/// A simple wrapper around an atomic u64, used to keep track of various metrics during sorts.
+///
+/// See [`crate::GLOBAL_COUNTERS`].
 #[derive(Debug)]
 pub struct GlobalCounter(std::sync::atomic::AtomicU64);
 
-// TODO: Is the ordering correct?
-#[allow(dead_code)]
 impl GlobalCounter {
+    /// Constructs a new global counter with initial value `0`
     pub const fn new() -> Self {
         Self(std::sync::atomic::AtomicU64::new(0))
     }
 
+    /// Increases the counter by `amount`.
     pub fn increase(&self, amount: u64) {
         self.0
             .fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
     }
 
+    /// Returns the current value of the counter and resets it to `0`
     pub fn read_and_reset(&self) -> u64 {
         self.0.swap(0, std::sync::atomic::Ordering::Relaxed)
     }
 }
 
-#[allow(dead_code)]
+/// A generic wrapper around a comparable elements, that tracks the number of times the element
+/// has been compared.
+///
+/// # Note
+///
+/// All comparisons are tracked together in the single counter `crate::GLOBAL_COUNTERS.comparisons`.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct CountComparisons<T>(T);
 
-#[allow(dead_code)]
 impl<T> CountComparisons<T> {
+    /// Increases the comparison counter by `amount`
     fn increase_counter(amount: u64) {
         crate::GLOBAL_COUNTERS.comparisons.increase(amount);
     }
@@ -190,72 +212,103 @@ impl<T: TryFrom<usize>> TryFrom<usize> for CountComparisons<T> {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PermutationData;
 
-/// A permutation with random runs
+/// A permutation with random runs of a certain expected length
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RandomRunsData(usize);
 
-/// A permutation with random runs
+/// A permutation with random runs of expected length `n.isqrt()`
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RandomRunsSqrtData;
 
-/// A permutation with random runs
+/// A permutation with random runs of expected and constant length `LENGTH`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RandomRunsConstData<const LENGTH: usize>;
 
-/// A trait for generalizing sorting data creation
-pub trait Data<T: Ord + std::fmt::Debug>: Default {
+/// Used to generate the data to be sorted.
+pub trait DataGenerator<T: Ord + std::fmt::Debug>: Default {
     /// Initialize a vector of the given size
-    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T>;
+    fn initialize(&mut self, size: usize, rng: &mut impl rand::Rng) -> Vec<T>;
+
+    /// Reinitialize the given slice of elements
+    fn reinitialize(&mut self, slice: &mut [T], rng: &mut impl rand::Rng);
 }
 
-impl<T> Data<T> for PermutationData
+impl<T> DataGenerator<T> for PermutationData
 where
     T: Ord + TryFrom<usize> + std::fmt::Debug,
     <T as TryFrom<usize>>::Error: std::fmt::Debug,
 {
-    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+    fn initialize(&mut self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
         let mut values: Vec<_> = (0..size).map(|i| T::try_from(i).unwrap()).collect();
-        values.shuffle(rng);
+
+        self.reinitialize(&mut values, rng);
+
         values
+    }
+
+    fn reinitialize(&mut self, slice: &mut [T], rng: &mut impl rand::Rng) {
+        slice.shuffle(rng);
     }
 }
 
-impl<T> Data<T> for RandomRunsData
+impl<T> DataGenerator<T> for RandomRunsData
 where
     T: Ord + TryFrom<usize> + std::fmt::Debug,
     <T as TryFrom<usize>>::Error: std::fmt::Debug,
 {
-    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+    fn initialize(&mut self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
         let mut values = PermutationData.initialize(size, rng);
+
+        self.reinitialize(&mut values, rng);
+
+        values
+    }
+
+    fn reinitialize(&mut self, slice: &mut [T], rng: &mut impl rand::Rng) {
+        PermutationData.reinitialize(slice, rng);
+
+        #[expect(
+            clippy::as_conversions,
+            reason = "length should be small enough so precision errors should not be a concern"
+        )]
         let geometric = rand_distr::Geometric::new(1.0 / self.0 as f64).unwrap();
 
         let mut start = 0;
-        while start < values.len() {
-            let len = std::cmp::min(geometric.sample(rng) as usize, values.len() - start);
-            values[start..start + len].sort();
+        while start < slice.len() {
+            let len = std::cmp::min(
+                geometric.sample(rng).try_into().unwrap_or(usize::MAX),
+                slice.len() - start,
+            );
+            slice[start..start + len].sort();
             start += len;
         }
-
-        values
     }
 }
 
-impl<T> Data<T> for RandomRunsSqrtData
+impl<T> DataGenerator<T> for RandomRunsSqrtData
 where
     T: Ord + TryFrom<usize> + std::fmt::Debug,
     <T as TryFrom<usize>>::Error: std::fmt::Debug,
 {
-    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+    fn initialize(&mut self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
         RandomRunsData(size.isqrt()).initialize(size, rng)
     }
+
+    fn reinitialize(&mut self, slice: &mut [T], rng: &mut impl rand::Rng) {
+        RandomRunsData(slice.len().isqrt()).reinitialize(slice, rng);
+    }
 }
 
-impl<T, const LENGTH: usize> Data<T> for RandomRunsConstData<LENGTH>
+impl<T, const LENGTH: usize> DataGenerator<T> for RandomRunsConstData<LENGTH>
 where
     T: Ord + TryFrom<usize> + std::fmt::Debug,
     <T as TryFrom<usize>>::Error: std::fmt::Debug,
 {
-    fn initialize(self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
+    fn initialize(&mut self, size: usize, rng: &mut impl rand::Rng) -> Vec<T> {
         RandomRunsData(LENGTH).initialize(size, rng)
+    }
+
+    fn reinitialize(&mut self, slice: &mut [T], rng: &mut impl rand::Rng) {
+        RandomRunsData(LENGTH).reinitialize(slice, rng);
     }
 }

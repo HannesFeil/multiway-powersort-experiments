@@ -194,7 +194,7 @@ struct CounterSample {
 /// - `size`: The size of the slices to sort
 /// - `rng`: The RNG used for sampling the data
 #[allow(dead_code, reason = "Unused when feature 'counters' is active")]
-fn perform_time_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
+fn perform_time_experiment<T: Ord + std::fmt::Debug, D: data::DataGenerator<T>>(
     sorter: fn(&mut [T]),
     runs: usize,
     size: usize,
@@ -232,7 +232,7 @@ fn perform_time_experiment<T: Ord + std::fmt::Debug, D: data::Data<T>>(
 #[allow(dead_code, reason = "Unused when feature 'counters' is inactive")]
 fn perform_counters_experiment<
     T: Ord + std::fmt::Debug,
-    D: data::Data<crate::data::CountComparisons<T>>,
+    D: data::DataGenerator<crate::data::CountComparisons<T>>,
 >(
     sorter: fn(&mut [crate::data::CountComparisons<T>]),
     runs: usize,
@@ -280,7 +280,11 @@ fn perform_counters_experiment<
 /// - `runs`: The number of samples to measure
 /// - `size`: The size of the slices to sort
 /// - `rng`: The RNG used for sampling the data
-fn perform_experiment<F: FnMut(std::time::Duration), T: Ord + std::fmt::Debug, D: data::Data<T>>(
+fn perform_experiment<
+    F: FnMut(std::time::Duration),
+    T: Ord + std::fmt::Debug,
+    D: data::DataGenerator<T>,
+>(
     mut sampler: F,
     sorter: fn(&mut [T]),
     runs: usize,
@@ -292,26 +296,28 @@ fn perform_experiment<F: FnMut(std::time::Duration), T: Ord + std::fmt::Debug, D
         reason = "Realistically runs is not gonna be higher than u64::MAX"
     )]
     let bar = indicatif::ProgressBar::new(runs as u64);
+    let mut generator = D::default();
+    let mut data = generator.initialize(size, rng);
 
     for run in 0..=runs {
-        let mut data = D::default().initialize(size, rng);
-
-        #[cfg(feature = "counters")]
-        GLOBAL_COUNTERS.reset();
-
         let now = std::time::Instant::now();
         sorter(std::hint::black_box(&mut data));
         let elapsed = now.elapsed();
-
-        // NOTE: Skip first sample (behavior taken from original codebase)
-        if run != 0 {
-            sampler(elapsed);
-            bar.inc(1);
-        }
 
         assert!(
             data.is_sorted(),
             "{data:?} is not sorted after algorithm run"
         );
+
+        // Skip first sample (behavior taken from original codebase)
+        if run != 0 {
+            sampler(elapsed);
+            bar.inc(1);
+        }
+
+        generator.reinitialize(&mut data, rng);
+
+        #[cfg(feature = "counters")]
+        GLOBAL_COUNTERS.reset();
     }
 }
