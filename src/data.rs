@@ -20,6 +20,7 @@ impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareFirstEntry {
 
 /// Compares two [`Blobs`](Blob) by comparing them in lexicographical order, e.g. comparing their
 /// first element and falling back to later elements on equality.
+#[expect(unused, reason = "Currently unused in experiments")]
 #[derive(Debug, Clone, Copy)]
 pub struct CompareLexicographical;
 
@@ -41,6 +42,7 @@ impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareLexicographic
 /// # Note
 ///
 /// This method only works for [`Blobs`](Blob) of `u32`.
+#[expect(unused, reason = "Currently unused in experiments")]
 #[derive(Debug, Clone, Copy)]
 pub struct CompareHash;
 
