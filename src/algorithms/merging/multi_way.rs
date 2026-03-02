@@ -253,11 +253,10 @@ impl Fourway {
             runs: &[super::Run<T>; 4],
         ) -> usize {
             unsafe {
-                if runs[index_b].is_empty() {
-                    index_a
-                } else if runs[index_a].is_empty() {
-                    index_b
-                } else if *runs[index_a].start() <= *runs[index_b].start() {
+                if runs[index_b].is_empty()
+                    || (!runs[index_a].is_empty()
+                        && *runs[index_a].start() <= *runs[index_b].start())
+                {
                     index_a
                 } else {
                     index_b
