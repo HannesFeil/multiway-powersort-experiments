@@ -111,44 +111,47 @@ impl TournamentTree {
         runs: &mut [super::Run<T>; K],
         output: &mut super::Run<T>,
     ) {
-        let compare = |a: &(usize, Option<*mut T>), b: &(usize, Option<*mut T>)| unsafe {
-            match (a.1, b.1) {
-                (None, None) => std::cmp::Ordering::Equal,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (Some(a_first), Some(b_first)) => (*a_first).cmp(&*b_first).then(a.0.cmp(&b.0)),
-            }
-        };
-
-        // Workaround for const generics
-        let mut nodes = [[(0, None); 2]; K];
-        let nodes = nodes.as_flattened_mut();
-
-        for (index, run) in runs.iter().enumerate() {
-            let projected_index = index + K - 1;
-
-            if !run.is_empty() {
-                nodes[projected_index] = (index, Some(run.start()))
+        unsafe fn min_run<T: Ord, const K: usize>(
+            index_a: usize,
+            index_b: usize,
+            runs: &[super::Run<T>; K],
+        ) -> usize {
+            unsafe {
+                if runs[index_b].is_empty()
+                    || (!runs[index_a].is_empty()
+                        && (&*runs[index_a].start(), index_a) <= (&*runs[index_b].start(), index_b))
+                {
+                    index_a
+                } else {
+                    index_b
+                }
             }
         }
 
-        for index in (0..K - 1).rev() {
-            let left_child = index * 2 + 1;
-            let right_child = index * 2 + 2;
+        // Workaround for const generics
+        let mut nodes = [[0; 2]; K];
+        let nodes = nodes.as_flattened_mut();
 
-            let min = std::cmp::min_by(nodes[left_child], nodes[right_child], compare);
-            nodes[index] = min;
+        for index in 0..runs.len() {
+            let projected_index = index + K - 1;
+
+            nodes[projected_index] = index;
         }
 
         unsafe {
-            for _ in 0..output.len() {
-                let run_index = nodes[0].0;
-                let run = &mut runs[run_index];
-                run.copy_nonoverlapping_prefix_to(output, 1);
+            for index in (0..K - 1).rev() {
+                let left_child = index * 2 + 1;
+                let right_child = index * 2 + 2;
 
-                let node = (run_index, (!run.is_empty()).then_some(run.start()));
+                let min = min_run(nodes[left_child], nodes[right_child], runs);
+                nodes[index] = min;
+            }
+
+            for _ in 0..output.len() {
+                let run_index = nodes[0];
+                runs[run_index].copy_nonoverlapping_prefix_to(output, 1);
+
                 let mut node_index = run_index + K - 1;
-                nodes[node_index] = node;
 
                 while node_index != 0 {
                     node_index = (node_index - 1) / 2;
@@ -156,7 +159,7 @@ impl TournamentTree {
                     let left_child = node_index * 2 + 1;
                     let right_child = node_index * 2 + 2;
 
-                    let min = std::cmp::min_by(nodes[left_child], nodes[right_child], compare);
+                    let min = min_run(nodes[left_child], nodes[right_child], runs);
 
                     nodes[node_index] = min;
                 }
