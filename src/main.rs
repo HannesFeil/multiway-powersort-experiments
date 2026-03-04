@@ -306,7 +306,7 @@ fn perform_experiment<
 
         assert!(
             data.is_sorted(),
-            "{data:?} is not sorted after algorithm run"
+            "Data was not sorted after algorithm run: {run}"
         );
 
         // Skip first sample (behavior taken from original codebase)
