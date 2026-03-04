@@ -1,9 +1,9 @@
-//! Multiple insertion sort implementations
+//! Multiple Insertion sort implementations
 
 /// The default `BINARY` parameter for `InsertionSort`
 pub const DEFAULT_BINARY: bool = false;
 
-/// The insertion [`super::Sort`]
+/// The Insertion [`super::Sort`].
 ///
 /// - `BINARY` indicates whether to use binary search for the insertion.
 pub struct InsertionSort<const BINARY: bool = DEFAULT_BINARY>;

@@ -1,4 +1,4 @@
-//! Contains various sorting algorithms see e.g. [`Sort`] and [`Algorithm`].
+//! Contains various sorting algorithms see e.g. [`Sort`].
 
 pub mod insertionsort;
 pub mod mergesort;

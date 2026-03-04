@@ -1,4 +1,4 @@
-//! The quicksort implementation
+//! The Quicksort implementation
 
 /// The default [`super::RngFactory`] to use
 pub type DefaultRngFactory = super::DefaultRngFactory;
@@ -15,7 +15,7 @@ pub const DEFAULT_NINTHER_THRESHOLD: usize = 128;
 /// The default `CHECK_SORTED` to use
 pub const DEFAULT_CHECK_SORTED: bool = false;
 
-/// The quicksort [`super::Sort`]
+/// The Quicksort [`super::Sort`].
 ///
 /// - `R` is the [`super::RngFactory`]>
 /// - `I` is the insertion sort to use for small slices.
