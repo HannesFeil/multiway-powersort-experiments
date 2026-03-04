@@ -56,7 +56,7 @@ impl<const STABLE: bool> Sort for StdSort<STABLE> {
 }
 
 /// A trait to parameterize random number generation
-pub trait RandomFactory {
+pub trait RngFactory {
     /// The [`rand::Rng`] type produced by this factory
     type Rng: rand::Rng;
 
@@ -67,7 +67,7 @@ pub trait RandomFactory {
 /// A factory producing the default [`rand::Rng`]
 pub struct DefaultRngFactory;
 
-impl RandomFactory for DefaultRngFactory {
+impl RngFactory for DefaultRngFactory {
     type Rng = rand::rngs::ThreadRng;
 
     fn produce() -> Self::Rng {

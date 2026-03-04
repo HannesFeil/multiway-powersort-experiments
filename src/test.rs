@@ -219,8 +219,6 @@ pub fn test_random_stable_sorted<
     const TEST_SIZE: usize,
     S: crate::algorithms::Sort,
 >() {
-    assert!(S::IS_STABLE);
-
     let mut rng = test_rng();
 
     // Random permutations with repeat elements
@@ -249,4 +247,6 @@ pub fn test_random_stable_sorted<
             Err(()) => panic!("Elements in run {run} were not sorted at all"),
         }
     }
+
+    assert!(S::IS_STABLE);
 }

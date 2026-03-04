@@ -1,6 +1,6 @@
 //! The quicksort implementation
 
-/// The default [`super::RandomFactory`] to use
+/// The default [`super::RngFactory`] to use
 pub type DefaultRngFactory = super::DefaultRngFactory;
 
 /// The default insertion sort to use
@@ -16,8 +16,15 @@ pub const DEFAULT_NINTHER_THRESHOLD: usize = 128;
 pub const DEFAULT_CHECK_SORTED: bool = false;
 
 /// The quicksort [`super::Sort`]
+///
+/// - `R` is the [`super::RngFactory`]>
+/// - `I` is the insertion sort to use for small slices.
+/// - `INSERTION_THRESHOLD` determines the maximum length of a sub slice to use insertion sort.
+/// - `NINTHER_THRESHOLD` determines the minimum length of a sub slice to use multiple median of
+///   three pivot choices.
+/// - `CHECK_SORTED` indicates whether a slice a checked for pre-sortedness before performing work.
 pub struct QuickSort<
-    R: super::RandomFactory = DefaultRngFactory,
+    R: super::RngFactory = DefaultRngFactory,
     I: super::Sort = DefaultInsertionSort,
     const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
     const NINTHER_THRESHOLD: usize = DEFAULT_NINTHER_THRESHOLD,
@@ -25,7 +32,7 @@ pub struct QuickSort<
 >(std::marker::PhantomData<R>, std::marker::PhantomData<I>);
 
 impl<
-    R: super::RandomFactory,
+    R: super::RngFactory,
     I: super::Sort,
     const INSERTION_THRESHOLD: usize,
     const NINTHER_THRESHOLD: usize,
@@ -54,7 +61,7 @@ impl<
 }
 
 impl<
-    RF: super::RandomFactory,
+    RF: super::RngFactory,
     I: super::Sort,
     const INSERTION_THRESHOLD: usize,
     const NINTHER_THRESHOLD: usize,
@@ -74,9 +81,11 @@ impl<
             return;
         }
 
-        // Check if we're already done and abort
-        if CHECK_SORTED && slice.is_sorted() {
-            return;
+        if CHECK_SORTED {
+            // Check if we're already done and abort
+            if slice.is_sorted() {
+                return;
+            }
         }
 
         // Increase the likelihood of having a good pivot
@@ -112,13 +121,13 @@ impl<
 
         // Recurse into both partitions
         Self::quicksort(&mut slice[..i], rng);
-        // This panics, other than the i = 0 case, which is why we need to check for it
+
         if i < slice.len() {
             Self::quicksort(&mut slice[i + 1..], rng);
         }
     }
 
-    /// Call [`move_median_to_first()`] with random indices
+    /// Calls [`move_median_to_first()`] with three random indices
     fn move_random_median_to_first<T: Ord, R: rand::Rng>(slice: &mut [T], rng: &mut R) {
         Self::move_median_to_first(
             slice,
@@ -128,7 +137,6 @@ impl<
         );
     }
 
-    // TODO: is this right?
     /// Swap the median of the three indices with the first element of the slice
     fn move_median_to_first<T: Ord>(slice: &mut [T], index1: usize, index2: usize, index3: usize) {
         let indices = &mut [index1, index2, index3];
@@ -165,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic] // TODO: should we implement stable quicksort?
+    #[should_panic]
     fn random_stable() {
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, QuickSort>();
         crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, QuickSortChecked>();
