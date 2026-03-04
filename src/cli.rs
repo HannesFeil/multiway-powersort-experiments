@@ -244,25 +244,28 @@ declare_variants! {
             peeksort::PeekSort,
         ],
         Algorithm::Mergesort => [
-            mergesort::TopDownMergeSort,
-            mergesort::TopDownMergeSort<
+            mergesort::MergeSort,
+            mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
+                { mergesort::DEFAULT_BOTTOM_UP },
                 1,
                 false
             >,
-            mergesort::TopDownMergeSort<
+            mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
+                { mergesort::DEFAULT_BOTTOM_UP },
                 1,
                 true
             >,
-            mergesort::BottomUpMergeSort<
+            mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
+                true,
                 { mergesort::DEFAULT_INSERTION_THRESHOLD },
                 true,
             >,

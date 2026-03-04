@@ -5,11 +5,14 @@ use crate::algorithms::merging::BufGuard as _;
 /// The default insertion sort to use
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
-/// The default [`super::merging::MergingMethod`] to use
+/// The default [`super::merging::two_way::MergingMethod`] to use
 pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
-/// The default BufGuardFactory to use
+/// The default [`super::BufGuardFactory`] to use
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
+
+/// The default `BOTTOM_UP` to use
+pub const DEFAULT_BOTTOM_UP: bool = false;
 
 /// The default `INSERTION_THRESHOLD` to use
 pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
@@ -17,11 +20,19 @@ pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
 /// The default `CHECK_SORTED` to use
 pub const DEFAULT_CHECK_SORTED: bool = true;
 
-/// The Top-Down Mergesort [`super::Sort`]
-pub struct TopDownMergeSort<
+/// Mergesort [`super::Sort`].
+///
+/// - `I` is the insertion sort, used to sort small sub slices.
+/// - `M` is the merging method, used to merge two runs.
+/// - `B` is the [`super::BufGuardFactory`] used to create the merging buffer.
+/// - `BOTTOM_UP` indicates whether bottom-up mergesort is used as opposed to top-down mergesort.
+/// - `INSERTION_THRESHOLD` determines the maximum length of sub slices which are sorted by `I`.
+/// - `CHECK_SORTED` enables a check for pre-sortedness before merging two runs.
+pub struct MergeSort<
     I: super::Sort = DefaultInsertionSort,
     M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
+    const BOTTOM_UP: bool = DEFAULT_BOTTOM_UP,
     const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
     const CHECK_SORTED: bool = DEFAULT_CHECK_SORTED,
 >(
@@ -34,9 +45,10 @@ impl<
     I: super::Sort,
     M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
+    const BOTTOM_UP: bool,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
-> super::Sort for TopDownMergeSort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
+> super::Sort for MergeSort<I, M, B, BOTTOM_UP, INSERTION_THRESHOLD, CHECK_SORTED>
 {
     const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
 
@@ -44,7 +56,7 @@ impl<
 
     fn parameters() -> impl Iterator<Item = (&'static str, String)> {
         vec![
-            ("top-down", true.to_string()),
+            ("bottom-up", BOTTOM_UP.to_string()),
             ("i-sort", crate::cli::display_inline::<I>()),
             ("merging", M::display()),
             ("i-threshold", INSERTION_THRESHOLD.to_string()),
@@ -62,7 +74,11 @@ impl<
         let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
 
         // Delegate to helper function
-        Self::top_down_mergesort(slice, buffer.as_uninit_slice_mut());
+        if BOTTOM_UP {
+            Self::bottom_up_mergesort(slice, buffer.as_uninit_slice_mut());
+        } else {
+            Self::top_down_mergesort(slice, buffer.as_uninit_slice_mut());
+        }
     }
 }
 
@@ -70,11 +86,12 @@ impl<
     I: super::Sort,
     M: super::merging::two_way::MergingMethod,
     B: super::BufGuardFactory,
+    const BOTTOM_UP: bool,
     const INSERTION_THRESHOLD: usize,
     const CHECK_SORTED: bool,
-> TopDownMergeSort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
+> MergeSort<I, M, B, BOTTOM_UP, INSERTION_THRESHOLD, CHECK_SORTED>
 {
-    /// The actual bottom-up mergesort implementation, sorts `slice`
+    /// The actual top-down mergesort implementation, sorts `slice`
     fn top_down_mergesort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
         if slice.len() <= INSERTION_THRESHOLD {
             I::sort(slice);
@@ -85,92 +102,46 @@ impl<
             Self::top_down_mergesort(left, buffer);
             Self::top_down_mergesort(right, buffer);
 
-            if !CHECK_SORTED || slice[middle] < slice[middle - 1] {
+            if CHECK_SORTED {
+                if left.last().unwrap() > right.first().unwrap() {
+                    M::merge(slice, middle, buffer);
+                }
+            } else {
                 M::merge(slice, middle, buffer);
             }
         }
     }
-}
 
-/// The Bottom-Up Mergesort [`super::Sort`]
-pub struct BottomUpMergeSort<
-    I: super::Sort = DefaultInsertionSort,
-    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
-    B: super::BufGuardFactory = DefaultBufGuardFactory,
-    const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
-    const CHECK_SORTED: bool = DEFAULT_CHECK_SORTED,
->(
-    std::marker::PhantomData<I>,
-    std::marker::PhantomData<M>,
-    std::marker::PhantomData<B>,
-);
-
-impl<
-    I: super::Sort,
-    M: super::merging::two_way::MergingMethod,
-    B: super::BufGuardFactory,
-    const INSERTION_THRESHOLD: usize,
-    const CHECK_SORTED: bool,
-> super::Sort for BottomUpMergeSort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
-{
-    const IS_STABLE: bool = I::IS_STABLE && M::IS_STABLE;
-
-    const BASE_NAME: &str = "mergesort";
-
-    fn parameters() -> impl Iterator<Item = (&'static str, String)> {
-        vec![
-            ("top-down", false.to_string()),
-            ("i-sort", crate::cli::display_inline::<I>()),
-            ("merging", M::display()),
-            ("i-threshold", INSERTION_THRESHOLD.to_string()),
-            ("check_sorted", CHECK_SORTED.to_string()),
-        ]
-        .into_iter()
-    }
-
-    fn sort<T: Ord>(slice: &mut [T]) {
-        if slice.len() < 2 {
-            return;
-        }
-
-        // Conservatively initiate a buffer big enough to merge the complete array
-        let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
-
-        // Delegate to helper function
-        Self::bottom_up_mergesort(slice, buffer.as_uninit_slice_mut());
-    }
-}
-
-impl<
-    I: super::Sort,
-    M: super::merging::two_way::MergingMethod,
-    B: super::BufGuardFactory,
-    const INSERTION_THRESHOLD: usize,
-    const CHECK_SORTED: bool,
-> BottomUpMergeSort<I, M, B, INSERTION_THRESHOLD, CHECK_SORTED>
-{
     /// The actual bottom-up mergesort implementation, sorts `slice`
     fn bottom_up_mergesort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
-        if INSERTION_THRESHOLD > 1 {
-            for chunk in slice.chunks_mut(INSERTION_THRESHOLD) {
-                I::sort(chunk);
-            }
+        assert!(
+            INSERTION_THRESHOLD >= 1,
+            "Insertion threshold has to be greater than or equal to 1"
+        );
 
-            let mut merge_size = INSERTION_THRESHOLD;
-            while merge_size < slice.len() {
-                let mut start = 0;
+        // Sort each chunk of insertion threshold
+        for chunk in slice.chunks_mut(INSERTION_THRESHOLD) {
+            I::sort(chunk);
+        }
 
-                while start < slice.len() - merge_size {
-                    if !CHECK_SORTED || slice[start + merge_size] < slice[start + merge_size - 1] {
-                        let end = std::cmp::min(start + 2 * merge_size, slice.len());
+        let mut merge_size = INSERTION_THRESHOLD;
+
+        // Iterate through merge tree levels from the bottom up
+        while merge_size < slice.len() {
+            // Merge all runs of length `merge_size`
+            for start in (0..slice.len() - merge_size).step_by(merge_size * 2) {
+                let end = std::cmp::min(start + 2 * merge_size, slice.len());
+
+                if CHECK_SORTED {
+                    if slice[start + merge_size] < slice[start + merge_size - 1] {
                         M::merge(&mut slice[start..end], merge_size, buffer);
                     }
-
-                    start += 2 * merge_size;
+                } else {
+                    M::merge(&mut slice[start..end], merge_size, buffer);
                 }
-
-                merge_size *= 2;
             }
+
+            merge_size *= 2;
         }
     }
 }
@@ -184,10 +155,19 @@ mod tests {
         use super::super::*;
         use super::*;
 
-        type BottomUpMergesortUnchecked = BottomUpMergeSort<
+        type BottomUpMergeSort = MergeSort<
             DefaultInsertionSort,
             DefaultMergingMethod,
             DefaultBufGuardFactory,
+            false,
+            DEFAULT_INSERTION_THRESHOLD,
+            DEFAULT_CHECK_SORTED,
+        >;
+        type BottomUpMergeSortUnchecked = MergeSort<
+            DefaultInsertionSort,
+            DefaultMergingMethod,
+            DefaultBufGuardFactory,
+            false,
             DEFAULT_INSERTION_THRESHOLD,
             false,
         >;
@@ -195,19 +175,19 @@ mod tests {
         #[test]
         fn empty() {
             crate::test::test_empty::<BottomUpMergeSort>();
-            crate::test::test_empty::<BottomUpMergesortUnchecked>();
+            crate::test::test_empty::<BottomUpMergeSortUnchecked>();
         }
 
         #[test]
         fn random() {
             crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergeSort>();
-            crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergesortUnchecked>();
+            crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergeSortUnchecked>();
         }
 
         #[test]
         fn random_stable() {
             crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergeSort>();
-            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergesortUnchecked>();
+            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergeSortUnchecked>();
         }
     }
 
@@ -215,30 +195,31 @@ mod tests {
         use super::super::*;
         use super::*;
 
-        type TopDownMergesortUnchecked = TopDownMergeSort<
+        type MergesortUnchecked = MergeSort<
             DefaultInsertionSort,
             DefaultMergingMethod,
             DefaultBufGuardFactory,
+            DEFAULT_BOTTOM_UP,
             DEFAULT_INSERTION_THRESHOLD,
             false,
         >;
 
         #[test]
         fn empty() {
-            crate::test::test_empty::<TopDownMergeSort>();
-            crate::test::test_empty::<TopDownMergesortUnchecked>();
+            crate::test::test_empty::<MergeSort>();
+            crate::test::test_empty::<MergesortUnchecked>();
         }
 
         #[test]
         fn random() {
-            crate::test::test_random_sorted::<RUNS, TEST_SIZE, TopDownMergeSort>();
-            crate::test::test_random_sorted::<RUNS, TEST_SIZE, TopDownMergesortUnchecked>();
+            crate::test::test_random_sorted::<RUNS, TEST_SIZE, MergeSort>();
+            crate::test::test_random_sorted::<RUNS, TEST_SIZE, MergesortUnchecked>();
         }
 
         #[test]
         fn random_stable() {
-            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, TopDownMergeSort>();
-            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, TopDownMergesortUnchecked>();
+            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, MergeSort>();
+            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, MergesortUnchecked>();
         }
     }
 }
