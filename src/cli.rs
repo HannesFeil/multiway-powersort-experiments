@@ -237,11 +237,17 @@ declare_variants! {
                 quicksort::DefaultInsertionSort,
                 { quicksort::DEFAULT_INSERTION_THRESHOLD },
                 { quicksort::DEFAULT_NINTHER_THRESHOLD },
-                true
+                true,
             >,
         ],
         Algorithm::Peeksort => [
-            peeksort::PeekSort,
+            peeksort::PeekSort<
+                peeksort::DefaultInsertionSort,
+                peeksort::DefaultMergingMethod,
+                peeksort::DefaultBufGuardFactory,
+                { peeksort::DEFAULT_INSERTION_THRESHOLD },
+                false,
+            >,
         ],
         Algorithm::Mergesort => [
             mergesort::MergeSort,
@@ -251,7 +257,7 @@ declare_variants! {
                 mergesort::DefaultBufGuardFactory,
                 { mergesort::DEFAULT_BOTTOM_UP },
                 1,
-                false
+                false,
             >,
             mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
@@ -259,7 +265,7 @@ declare_variants! {
                 mergesort::DefaultBufGuardFactory,
                 { mergesort::DEFAULT_BOTTOM_UP },
                 1,
-                true
+                true,
             >,
             mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
