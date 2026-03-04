@@ -1,11 +1,11 @@
 //! Multiple insertion sort implementations
 
-// TODO: consider working with pointers/unsafe? of course there are a lot of in bounds checks here
-
 /// The default `BINARY` parameter for `InsertionSort`
 pub const DEFAULT_BINARY: bool = false;
 
 /// The insertion [`super::Sort`]
+///
+/// - `BINARY` indicates whether to use binary search for the insertion.
 pub struct InsertionSort<const BINARY: bool = DEFAULT_BINARY>;
 
 impl<const BINARY: bool> super::Sort for InsertionSort<BINARY> {
@@ -37,7 +37,7 @@ impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
 }
 
 impl<const BINARY: bool> InsertionSort<BINARY> {
-    /// Sort slice using insertion sort, assuming that `slice[0..partition]` is already in order
+    /// Sorts slice using insertion sort, assuming that `slice[0..partition]` is already in order
     fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
         assert!(
             (0..=slice.len()).contains(&partition_point),
@@ -48,7 +48,8 @@ impl<const BINARY: bool> InsertionSort<BINARY> {
         for i in partition_point..slice.len() {
             for j in (0..i).rev() {
                 if slice[j + 1] < slice[j] {
-                    // TODO: swapping is easiest, otherwise I'd have to work with unsafe I think
+                    // NOTE: Swapping here seems to have no strong performance implications as
+                    // opposed to 'rotating', especially since the general case has so few elements
                     slice.swap(j + 1, j);
                 } else {
                     break;
@@ -57,7 +58,8 @@ impl<const BINARY: bool> InsertionSort<BINARY> {
         }
     }
 
-    /// Sort slice using binary insertion sort, assuming that `slice[0..partition]` is already in order
+    /// Sorts slice using binary insertion sort, assuming that `slice[0..partition]` is already in
+    /// order.
     fn binary_insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
         assert!(
             (0..=slice.len()).contains(&partition_point),
