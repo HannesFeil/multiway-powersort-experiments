@@ -112,12 +112,12 @@ impl<
         while run_a.end != slice.len() {
             let run_b = Self::next_run(slice, run_a.end);
 
-            assert!(run_a.end == run_b.start);
-            let node_power = N::node_power(slice.len(), run_a.clone(), run_b.clone());
-            assert!(node_power != stack.top_power());
+            debug_assert!(run_a.end == run_b.start);
+            let node_power_a = N::node_power(slice.len(), run_a.clone(), run_b.clone());
+            debug_assert!(node_power_a != stack.top_power());
 
-            if node_power < stack.top_power() {
-                for (_, run) in stack.pop_runs(node_power) {
+            if node_power_a < stack.top_power() {
+                for (_, run) in stack.pop_runs_with_greater_power(node_power_a) {
                     run_a.start = run.start;
                     M::merge(&mut slice[run_a.clone()], run.len(), buffer);
                     // TODO: keep these assertions as debug invariants? (other sorts?)
@@ -125,11 +125,11 @@ impl<
                 }
             }
 
-            stack.push(run_a, node_power);
+            stack.push(run_a, node_power_a);
             run_a = run_b;
         }
 
-        for (_, run) in stack.pop_runs(0) {
+        for (_, run) in stack.pop_all() {
             M::merge(&mut slice[run.start..], run.len(), buffer);
         }
     }
@@ -237,17 +237,17 @@ impl<
         let mut split_points = [0; MERGE_K_RUNS];
         let mut split_points_index = MERGE_K_RUNS;
         let mut run_a = Self::next_run(slice, 0);
-        assert!(slice[run_a.clone()].is_sorted());
+        debug_assert!(slice[run_a.clone()].is_sorted());
 
         while run_a.end != slice.len() {
             let run_b = Self::next_run(slice, run_a.end);
-            assert!(slice[run_b.clone()].is_sorted());
+            debug_assert!(slice[run_b.clone()].is_sorted());
 
             let node_power = N::node_power(slice.len(), run_a.clone(), run_b.clone());
 
             let mut top_power = stack.top_power();
             if node_power < top_power {
-                for (power, run) in stack.pop_runs(node_power) {
+                for (power, run) in stack.pop_runs_with_greater_power(node_power) {
                     if top_power != power {
                         M::merge(
                             &mut slice[run_a.clone()],
@@ -263,7 +263,7 @@ impl<
                     run_a.start = run.start;
                 }
 
-                assert!(!split_points.is_empty());
+                assert!(split_points_index < MERGE_K_RUNS);
                 M::merge(
                     &mut slice[run_a.clone()],
                     &split_points[split_points_index..],
@@ -276,7 +276,7 @@ impl<
             run_a = run_b;
         }
 
-        let mut remaining = stack.pop_runs(0);
+        let mut remaining = stack.pop_runs_with_greater_power(0);
         while run_a.start != 0 {
             for _ in 0..MERGE_K_RUNS - 1 {
                 let Some((_, run)) = remaining.next() else {
@@ -339,12 +339,17 @@ trait RunStack {
     /// After this call, [`RunStack::top_power()`] will be less than or equal to `power`.
     fn push(&mut self, run: Run, power: usize);
 
-    /// Pop runs from the top until [`RunStack::top_power()`] is less than `power`
+    /// Pop runs from the top until [`RunStack::top_power()`] is less than or equal to `power`
     ///
     /// power must be smaller than or equal to [`RunStack::top_power()`].
     /// After this call, [`RunStack::top_power()`] will be less than or equal to `power`.
-    fn pop_runs<'this>(&'this mut self, power: usize)
-    -> impl Iterator<Item = (usize, Run)> + 'this;
+    fn pop_runs_with_greater_power<'this>(
+        &'this mut self,
+        power: usize,
+    ) -> impl Iterator<Item = (usize, Run)> + 'this;
+
+    /// Pops all remaining runs from this stack
+    fn pop_all(self) -> impl Iterator<Item = (usize, Run)>;
 }
 
 /// A simple stack
@@ -369,7 +374,7 @@ impl RunStack for Stack {
         self.1 = power;
     }
 
-    fn pop_runs<'this>(
+    fn pop_runs_with_greater_power<'this>(
         &'this mut self,
         power: usize,
     ) -> impl Iterator<Item = (usize, Run)> + 'this {
@@ -377,9 +382,15 @@ impl RunStack for Stack {
 
         let top_power = self.top_power();
         self.1 = power;
-        (power..=top_power)
+        (power + 1..=top_power)
             .rev()
             .filter_map(|i| self.0[i].take().map(|run| (i, run)))
+    }
+
+    fn pop_all(mut self) -> impl Iterator<Item = (usize, Run)> {
+        (0..=self.top_power())
+            .rev()
+            .filter_map(move |i| self.0[i].take().map(|run| (i, run)))
     }
 }
 
@@ -403,19 +414,23 @@ impl RunStack for PowerIndexedStack {
         self.0.push((power, run));
     }
 
-    fn pop_runs<'this>(
+    fn pop_runs_with_greater_power<'this>(
         &'this mut self,
         power: usize,
     ) -> impl Iterator<Item = (usize, Run)> + 'this {
         assert!(power <= self.top_power());
 
         std::iter::from_fn(move || {
-            if self.top_power() >= power {
+            if self.top_power() > power {
                 self.0.pop()
             } else {
                 None
             }
         })
+    }
+
+    fn pop_all(self) -> impl Iterator<Item = (usize, Run)> {
+        self.0.into_iter().rev()
     }
 }
 

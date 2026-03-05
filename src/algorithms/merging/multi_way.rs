@@ -286,6 +286,26 @@ impl Fourway {
     }
 }
 
+impl<M: super::two_way::MergingMethod> MultiMergingMethod<2> for M {
+    const IS_STABLE: bool = M::IS_STABLE;
+
+    fn display() -> String {
+        M::display()
+    }
+
+    fn merge<T: Ord>(
+        slice: &mut [T],
+        run_lengths: &[usize],
+        buffer: &mut [std::mem::MaybeUninit<T>],
+    ) {
+        if run_lengths.is_empty() {
+            return;
+        }
+
+        M::merge(slice, run_lengths[0], buffer);
+    }
+}
+
 // TODO: refactor please
 #[cfg(test)]
 mod tests {
