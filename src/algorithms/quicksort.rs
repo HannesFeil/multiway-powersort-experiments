@@ -88,6 +88,9 @@ impl<
             }
         }
 
+        // This helps with bounds check elimination I think
+        assert!(slice.len() > INSERTION_THRESHOLD);
+
         // Increase the likelihood of having a good pivot
         Self::move_random_median_to_first(slice, rng);
         if slice.len() >= NINTHER_THRESHOLD {
@@ -121,10 +124,7 @@ impl<
 
         // Recurse into both partitions
         Self::quicksort(&mut slice[..i], rng);
-
-        if i < slice.len() {
-            Self::quicksort(&mut slice[i + 1..], rng);
-        }
+        Self::quicksort(&mut slice[i + 1..], rng);
     }
 
     /// Calls [`move_median_to_first()`] with three random indices
