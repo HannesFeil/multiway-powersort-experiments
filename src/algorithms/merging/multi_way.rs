@@ -320,14 +320,12 @@ mod tests {
     const TEST_RUNS: usize = 1000;
 
     macro_rules! test_multi_methods {
-        ($($method:ident: [$($k:expr),+]),+$(,)?) => {
+        ($($module_name:ident : $method:ident [$($k:expr),+]),+$(,)?) => {
             $(
-                paste::paste! {
-                    mod [< $method:snake >] {
-                        use super::*;
+                mod $module_name {
+                    use super::*;
 
-                        test_multi_methods!(@single $method [$($k),*]);
-                    }
+                    test_multi_methods!(@single $method [$($k),*]);
                 }
             )*
         };
@@ -374,8 +372,8 @@ mod tests {
     }
 
     test_multi_methods! {
-        TournamentTree: [2, 3, 4, 5, 6, 7, 8],
-        Fourway: [4],
+        tournament_tree: TournamentTree [2, 3, 4, 5, 6, 7, 8],
+        fourway: Fourway [4],
     }
 
     /// Test merging an empty slice

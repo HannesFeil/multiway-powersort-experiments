@@ -561,18 +561,18 @@ mod tests {
     const TEST_RUNS: usize = 100;
 
     macro_rules! test_methods {
-        ($($method:ident),*) => {
+        (
+            $($module_name:ident: $method:ty),*
+        ) => {
             $(
-                paste::paste! {
-                    mod [< $method:snake >] {
-                        use super::*;
+                mod $module_name {
+                    use super::*;
 
-                        test_methods!(@single $method);
-                    }
+                    test_methods!(@single $method);
                 }
             )*
         };
-        (@single $method:ident) => {
+        (@single $method:ty) => {
             #[test]
             fn test_empty_merges() {
                 test_empty_merge::<$method>();
@@ -597,7 +597,7 @@ mod tests {
         };
     }
 
-    test_methods!(CopyBoth, Galloping);
+    test_methods!(copy_both: CopyBoth, galloping: Galloping);
 
     /// Test merging an empty slice
     fn test_empty_merge<T: MergingMethod>() {
