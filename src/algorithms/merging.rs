@@ -94,21 +94,33 @@ pub mod util {
 
     // TODO: add returned enum
 
+    #[derive(Debug, Clone, Copy)]
+    pub enum RunOrdering {
+        WeaklyIncreasing,
+        StrictlyDecreasing,
+    }
+
     /// Returns the largest (`index`, `decreasing`), such that `slice[index..]` is weakly increasing or
     /// strictly decreasing. `decreasing` indicating if the found sequence is strictly decreasing.
     pub fn weakly_increasing_or_strictly_decreasing_index<T: Ord>(
         slice: &mut [T],
-    ) -> (usize, bool) {
+    ) -> (usize, RunOrdering) {
         if slice.len() < 2 {
-            return (slice.len(), false);
+            return (slice.len(), RunOrdering::WeaklyIncreasing);
         }
 
         let (first, rest) = slice.split_first().unwrap();
 
         if first > rest.first().unwrap() {
-            (strictly_decreasing_prefix_index(rest) + 1, true)
+            (
+                strictly_decreasing_prefix_index(rest) + 1,
+                RunOrdering::StrictlyDecreasing,
+            )
         } else {
-            (weakly_increasing_prefix_index(rest) + 1, false)
+            (
+                weakly_increasing_prefix_index(rest) + 1,
+                RunOrdering::WeaklyIncreasing,
+            )
         }
     }
 }

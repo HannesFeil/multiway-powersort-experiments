@@ -297,7 +297,7 @@ declare_variants! {
         Algorithm::MultiwayPowersort => [
             powersort::MultiwayPowerSort,
             powersort::MultiwayPowerSort<
-                powersort::node_power::DivisionLoop,
+                powersort::DefaultNodePowerMethod,
                 powersort::DefaultInsertionSort,
                 merging::multi_way::Fourway,
                 powersort::DefaultBufGuardFactory,

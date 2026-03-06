@@ -1,39 +1,43 @@
-//! The powersort implementation
+//! The Powersort implementation.
 
 use crate::algorithms::merging::BufGuard as _;
 
-/// The default node power calculation method
+/// The default [`node_power::NodePowerMethod`] to use.
 pub type DefaultNodePowerMethod = node_power::MostSignificantSetBit;
 
-/// The default insertion sort to use
+/// The default insertion sort to use.
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
-/// The default [`super::merging::MergingMethod`] to use
+/// The default [`super::merging::two_way::MergingMethod`] to use.
 pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
-/// The default [`super::merging::MultiMergingMethod`] to use
+/// The default [`super::merging::multi_way::MultiMergingMethod`] to use.
 pub type DefaultMultiMergingMethod = super::merging::multi_way::TournamentTree;
 
-/// The default BufGuardFactory to use
+/// The default [`super::BufGuardFactory`] to use.
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
 
-/// The default `MERGE_K_RUNS` to use for multiway powersort
+/// The default `MERGE_K_RUNS` to use.
 pub const DEFAULT_MERGE_K_RUNS: usize = 4;
 
-/// The default `MIN_RUN_LENGTH` to use
+/// The default `MIN_RUN_LENGTH` to use.
 pub const DEFAULT_MIN_RUN_LENGTH: usize = 24;
 
-/// The default `ONLY_INCREASING_RUNS` to use
+/// The default `ONLY_INCREASING_RUNS` to use.
 pub const DEFAULT_ONLY_INCREASING_RUNS: bool = false;
 
-// TODO: should this be reversed?
-/// The default `POWER_INDEXED_STACK` to use
+/// The default `USE_POWER_INDEXED_STACK` to use.
 pub const DEFAULT_USE_POWER_INDEXED_STACK: bool = false;
 
-/// Type used to represent runs of sorted elements
-type Run = std::ops::Range<usize>;
-
-/// The powersort [`super::Sort`]
+/// The Powersort [`super::Sort`].
+///
+/// - `N` is the [`noder_power::NodePowerMethod`] used to calculate the node power of runs.
+/// - `I` is the insertion sort used to extend small runs.
+/// - `M` is the [`super::merging::two_way::MergingMethod`] used to merge runs.
+/// - `B` is the [`super::BufGuardFactory`] used to create the buffer for merging.
+/// - `MIN_RUN_LENGTH` determines the minimum length up to which runs will be manually extended.
+/// - `ONLY_INCREASING_RUNS` indicates whether only to use preexisting weakly increasing runs.
+/// - `USE_POWER_INDEXED_STACK` indicates whether to use a power indexed stack.
 pub struct PowerSort<
     N: node_power::NodePowerMethod<2> = DefaultNodePowerMethod,
     I: super::PostfixSort = DefaultInsertionSort,
@@ -93,6 +97,9 @@ impl<
     }
 }
 
+/// Type used to represent runs of sorted elements
+type Run = std::ops::Range<usize>;
+
 impl<
     N: node_power::NodePowerMethod<2>,
     I: super::PostfixSort,
@@ -103,67 +110,56 @@ impl<
     const USE_POWER_INDEXED_STACK: bool,
 > PowerSort<N, I, M, B, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS, USE_POWER_INDEXED_STACK>
 {
+    /// The actual Powersort implementation.
     fn powersort<T: Ord, S: RunStack>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
-        // TODO: unwrap?
-        let max_stack_height = usize::try_from(slice.len().ilog2()).unwrap() + 2;
+        // Create the run stack
+        let max_stack_height =
+            usize::try_from(slice.len().ilog2()).expect("This can not panic") + 2;
         let mut stack = S::new(max_stack_height);
-        let mut run_a = Self::next_run(slice, 0);
 
-        while run_a.end != slice.len() {
-            let run_b = Self::next_run(slice, run_a.end);
+        // Find current run
+        let mut current_run = next_run::<_, I, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS>(slice, 0);
 
-            debug_assert!(run_a.end == run_b.start);
-            let node_power_a = N::node_power(slice.len(), run_a.clone(), run_b.clone());
-            debug_assert!(node_power_a != stack.top_power());
+        // Iterate until we reach the end
+        while current_run.end != slice.len() {
+            // Find next run
+            let next_run =
+                next_run::<_, I, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS>(slice, current_run.end);
 
-            if node_power_a < stack.top_power() {
-                for (_, run) in stack.pop_runs_with_greater_power(node_power_a) {
-                    run_a.start = run.start;
-                    M::merge(&mut slice[run_a.clone()], run.len(), buffer);
-                    // TODO: keep these assertions as debug invariants? (other sorts?)
-                    debug_assert!(slice[run_a.clone()].is_sorted());
-                }
+            // Calculate the node power of the current run
+            assert!(current_run.end == next_run.start);
+            let current_node_power =
+                N::node_power(slice.len(), current_run.clone(), next_run.clone());
+            assert!(current_node_power != stack.top_power());
+
+            // Pop and merge runs with higher power from the stack with the current run.
+            for (_, run) in stack.pop_runs_with_greater_power(current_node_power) {
+                current_run.start = run.start;
+
+                M::merge(&mut slice[current_run.clone()], run.len(), buffer);
             }
 
-            stack.push(run_a, node_power_a);
-            run_a = run_b;
+            // Push current run onto the stack
+            stack.push(current_run, current_node_power);
+            current_run = next_run;
         }
 
+        // Merge all remaining runs with the rest of the slice
         for (_, run) in stack.pop_all() {
             M::merge(&mut slice[run.start..], run.len(), buffer);
         }
     }
-
-    fn extend_run<T: Ord>(slice: &mut [T]) -> usize {
-        if ONLY_INCREASING_RUNS {
-            super::merging::util::weakly_increasing_prefix_index(slice)
-        } else {
-            match super::merging::util::weakly_increasing_or_strictly_decreasing_index(slice) {
-                (index, false) => index,
-                (index, true) => {
-                    slice[..index].reverse();
-                    index
-                }
-            }
-        }
-    }
-
-    fn next_run<T: Ord>(slice: &mut [T], start: usize) -> Run {
-        let run = start..start + Self::extend_run(&mut slice[start..]);
-
-        if run.len() < MIN_RUN_LENGTH {
-            let end = std::cmp::min(slice.len(), start + MIN_RUN_LENGTH);
-
-            I::sort_with_sorted_prefix(&mut slice[start..end], run.len());
-
-            start..end
-        } else {
-            run
-        }
-    }
 }
 
-/// The powersort [`super::Sort`]
+/// The Multiway Powersort [`super::Sort`].
+///
+/// - `N` is the [`noder_power::NodePowerMethod`] used to calculate the node power of runs.
+/// - `I` is the insertion sort used to extend small runs.
+/// - `M` is the [`super::merging::multi_way::MultiMergingMethod`] used to merge runs.
+/// - `B` is the [`super::BufGuardFactory`] used to create the buffer for merging.
+/// - `MERGE_K_RUNS` determines how many runs are merged together.
+/// - `MIN_RUN_LENGTH` determines the minimum length up to which runs will be manually extended.
+/// - `ONLY_INCREASING_RUNS` indicates whether only to use preexisting weakly increasing runs.
 pub struct MultiwayPowerSort<
     N: node_power::NodePowerMethod<MERGE_K_RUNS> = DefaultNodePowerMethod,
     I: super::PostfixSort = DefaultInsertionSort,
@@ -214,6 +210,7 @@ impl<
         // Conservatively initiate a buffer big enough to merge the complete array
         let mut buffer = <B::Guard<T>>::with_capacity(M::required_capacity(slice.len()));
 
+        // Delegate to helper function
         Self::multiway_powersort(slice, buffer.as_uninit_slice_mut());
     }
 }
@@ -228,135 +225,193 @@ impl<
     const ONLY_INCREASING_RUNS: bool,
 > MultiwayPowerSort<N, I, M, B, MERGE_K_RUNS, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS>
 {
+    // The actual Multiway Powersort implementation.
     fn multiway_powersort<T: Ord>(slice: &mut [T], buffer: &mut [std::mem::MaybeUninit<T>]) {
-        // TODO: unwrap?
-        let max_stack_height =
-            (MERGE_K_RUNS - 1) * (usize::try_from(slice.len().ilog(MERGE_K_RUNS)).unwrap() + 2);
-        let mut stack = PowerIndexedStack::new(max_stack_height);
-        // NOTE: We technically only need `MERGE_K_RUNS - 1` but that is feature gated
-        let mut split_points = [0; MERGE_K_RUNS];
-        let mut split_points_index = MERGE_K_RUNS;
-        let mut run_a = Self::next_run(slice, 0);
-        debug_assert!(slice[run_a.clone()].is_sorted());
+        // Create run stack
+        let max_stack_height = (MERGE_K_RUNS - 1)
+            * (usize::try_from(slice.len().ilog(MERGE_K_RUNS)).expect("This can not fail") + 2);
+        let mut stack = Stack::new(max_stack_height);
 
-        while run_a.end != slice.len() {
-            let run_b = Self::next_run(slice, run_a.end);
-            debug_assert!(slice[run_b.clone()].is_sorted());
+        // NOTE: We technically only need `MERGE_K_RUNS - 1` but that is unstable (const generics)
+        // `run_lengths[run_lengths_index..]` forms the stack of merging split points use by `M`.
+        // We build the stack from the back, since that is the order `M` expects.
+        let mut run_lengths = [0; MERGE_K_RUNS];
+        let mut run_lengths_index = MERGE_K_RUNS;
 
-            let node_power = N::node_power(slice.len(), run_a.clone(), run_b.clone());
+        // Find current run
+        let mut current_run = next_run::<_, I, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS>(slice, 0);
 
+        // Iterate until we reach the end
+        while current_run.end != slice.len() {
+            // Find next run
+            let next_run =
+                next_run::<_, I, MIN_RUN_LENGTH, ONLY_INCREASING_RUNS>(slice, current_run.end);
+
+            // Calculate the node power of the current run
+            let node_power = N::node_power(slice.len(), current_run.clone(), next_run.clone());
+
+            // Pop runs from the stack until the current node power is the highest
             let mut top_power = stack.top_power();
             if node_power < top_power {
+                // Pop runs and collect run lengths of runs of equal power in `run_lengths`
                 for (power, run) in stack.pop_runs_with_greater_power(node_power) {
+                    // Run power drops, merge all previously collected runs
                     if top_power != power {
                         M::merge(
-                            &mut slice[run_a.clone()],
-                            &split_points[split_points_index..],
+                            &mut slice[current_run.clone()],
+                            &run_lengths[run_lengths_index..],
                             buffer,
                         );
-                        split_points_index = MERGE_K_RUNS;
+
+                        // Empty `run_lengths` stack and update last power
+                        run_lengths_index = MERGE_K_RUNS;
                         top_power = power;
                     }
 
-                    split_points_index -= 1;
-                    split_points[split_points_index] = run.len();
-                    run_a.start = run.start;
+                    // Push run onto the `run_lengths` stack
+                    run_lengths_index -= 1;
+                    run_lengths[run_lengths_index] = run.len();
+
+                    // Expand current run start (since we will merge)
+                    current_run.start = run.start;
                 }
 
-                assert!(split_points_index < MERGE_K_RUNS);
+                // There will be at least one run left to merge at this point
+                assert!(run_lengths_index < MERGE_K_RUNS);
                 M::merge(
-                    &mut slice[run_a.clone()],
-                    &split_points[split_points_index..],
+                    &mut slice[current_run.clone()],
+                    &run_lengths[run_lengths_index..],
                     buffer,
                 );
-                split_points_index = MERGE_K_RUNS;
+
+                // Empty `run_lengths` stack
+                run_lengths_index = MERGE_K_RUNS;
             }
 
-            stack.push(run_a, node_power);
-            run_a = run_b;
+            stack.push(current_run, node_power);
+            current_run = next_run;
         }
 
-        let mut remaining = stack.pop_runs_with_greater_power(0);
-        while run_a.start != 0 {
-            for _ in 0..MERGE_K_RUNS - 1 {
-                let Some((_, run)) = remaining.next() else {
-                    break;
-                };
+        let stack_size = stack.len();
+        let remainder = stack_size % (MERGE_K_RUNS - 1);
 
-                split_points_index -= 1;
-                split_points[split_points_index] = run.len();
-                run_a.start = run.start;
+        // Pop all remaining runs
+        let mut remaining_runs = stack.pop_runs_with_greater_power(0);
+
+        // Merge runs so we have a multiple of `MERGE_K_RUNS - 1` runs left
+        if remainder > 0 {
+            // Collect run lengths
+            for (_, run) in remaining_runs.by_ref().take(remainder) {
+                run_lengths_index -= 1;
+                run_lengths[run_lengths_index] = run.len();
+                current_run.start = run.start;
             }
 
             M::merge(
-                &mut slice[run_a.clone()],
-                &split_points[split_points_index..],
+                &mut slice[current_run.clone()],
+                &run_lengths[run_lengths_index..],
                 buffer,
             );
-            split_points_index = MERGE_K_RUNS;
         }
-    }
 
-    fn extend_run<T: Ord>(slice: &mut [T]) -> usize {
-        if ONLY_INCREASING_RUNS {
-            super::merging::util::weakly_increasing_prefix_index(slice)
-        } else {
-            match super::merging::util::weakly_increasing_or_strictly_decreasing_index(slice) {
-                (index, false) => index,
-                (index, true) => {
-                    slice[..index].reverse();
-                    index
-                }
+        // Repeatedly merge `MERGE_K_RUNS - 1` top runs and the current run
+        for _ in 0..stack_size / (MERGE_K_RUNS - 1) {
+            // Collect run lengths
+            for i in (1..MERGE_K_RUNS).rev() {
+                let run = remaining_runs.next().unwrap().1;
+                run_lengths[i] = run.len();
+                current_run.start = run.start;
             }
-        }
-    }
 
-    fn next_run<T: Ord>(slice: &mut [T], start: usize) -> Run {
-        let run = start..start + Self::extend_run(&mut slice[start..]);
-
-        if run.len() < MIN_RUN_LENGTH {
-            let end = std::cmp::min(slice.len(), start + MIN_RUN_LENGTH);
-
-            I::sort_with_sorted_prefix(&mut slice[start..end], run.len());
-
-            start..end
-        } else {
-            run
+            M::merge(&mut slice[current_run.clone()], &run_lengths[1..], buffer);
         }
     }
 }
 
+/// Finds the maximum index `i` such that `slice[..i]` is weakly increasing.
+///
+/// If `ONLY_INCREASING_RUNS` is `false`, and `slice[..j]` contains a strictly decreasing run,
+/// reverses that run and returns `j`.
+fn find_run<T: Ord, const ONLY_INCREASING_RUNS: bool>(slice: &mut [T]) -> usize {
+    if ONLY_INCREASING_RUNS {
+        super::merging::util::weakly_increasing_prefix_index(slice)
+    } else {
+        match super::merging::util::weakly_increasing_or_strictly_decreasing_index(slice) {
+            (index, super::merging::util::RunOrdering::WeaklyIncreasing) => index,
+            (index, super::merging::util::RunOrdering::StrictlyDecreasing) => {
+                slice[..index].reverse();
+                index
+            }
+        }
+    }
+}
+
+/// Creates the next run, by finding the longest existing run and potentially extending it using
+/// `I` such that it is at least `MIN_RUN_LENGTH` elements long.
+fn next_run<
+    T: Ord,
+    I: super::PostfixSort,
+    const MIN_RUN_LENGTH: usize,
+    const ONLY_INCREASING_RUNS: bool,
+>(
+    slice: &mut [T],
+    start: usize,
+) -> Run {
+    // Find longest existing run
+    let run = start..start + find_run::<_, ONLY_INCREASING_RUNS>(&mut slice[start..]);
+
+    // Extend run if too short
+    if run.len() < MIN_RUN_LENGTH {
+        let end = std::cmp::min(slice.len(), start + MIN_RUN_LENGTH);
+
+        I::sort_with_sorted_prefix(&mut slice[start..end], run.len());
+
+        start..end
+    } else {
+        run
+    }
+}
+
+/// Unifies behavior of run stack implementations.
 trait RunStack {
-    /// Create a new stack with the given capacity
+    /// Creates a new stack with the given capacity.
     fn new(capacity: usize) -> Self;
 
-    /// Returns a power greater or equal to the highest power of a run in the stack
+    /// Returns a power greater or equal to the highest power of a run in the stack.
     fn top_power(&self) -> usize;
 
-    /// Push a new run onto the stack
+    /// Push a new run onto the stack.
     ///
-    /// power must be greater than or equal to [`RunStack::top_power()`].
-    /// After this call, [`RunStack::top_power()`] will be less than or equal to `power`.
+    /// `power` must be greater than or equal to [`RunStack::top_power()`].
+    /// After this call, [`RunStack::top_power()`] will be equal to `power`.
     fn push(&mut self, run: Run, power: usize);
 
-    /// Pop runs from the top until [`RunStack::top_power()`] is less than or equal to `power`
+    /// Pop runs from the top of the stack until the highest power is less than or equal to `power`.
     ///
-    /// power must be smaller than or equal to [`RunStack::top_power()`].
     /// After this call, [`RunStack::top_power()`] will be less than or equal to `power`.
+    ///
+    /// # Note
+    ///
+    /// If the returned iterator is not fully consumed, the resulting state of the stack is left
+    /// unspecified.
     fn pop_runs_with_greater_power<'this>(
         &'this mut self,
         power: usize,
     ) -> impl Iterator<Item = (usize, Run)> + 'this;
 
-    /// Pops all remaining runs from this stack
+    /// Pops all remaining runs from this stack.
     fn pop_all(self) -> impl Iterator<Item = (usize, Run)>;
+
+    /// Returns the number of runs left on the stack.
+    fn len(&self) -> usize;
 }
 
-/// A simple stack
+/// A power indexed stack, cannot be used for [`MultiwayPowerSort`] since it can only store one run
+/// of each power.
 #[derive(Debug)]
-struct Stack(Box<[Option<Run>]>, usize);
+struct PowerIndexedStack(Box<[Option<Run>]>, usize);
 
-impl RunStack for Stack {
+impl RunStack for PowerIndexedStack {
     fn new(capacity: usize) -> Self {
         Self(std::iter::repeat_n(None, capacity).collect(), 0)
     }
@@ -368,7 +423,7 @@ impl RunStack for Stack {
     fn push(&mut self, run: Run, power: usize) {
         assert!(power >= self.1);
         assert!(power < self.0.len());
-        assert!(self.0[power].is_none());
+        assert!(self.0[power].is_none(), "Power slot is already occupied");
 
         self.0[power] = Some(run);
         self.1 = power;
@@ -378,8 +433,6 @@ impl RunStack for Stack {
         &'this mut self,
         power: usize,
     ) -> impl Iterator<Item = (usize, Run)> + 'this {
-        assert!(power <= self.top_power());
-
         let top_power = self.top_power();
         self.1 = power;
         (power + 1..=top_power)
@@ -392,13 +445,20 @@ impl RunStack for Stack {
             .rev()
             .filter_map(move |i| self.0[i].take().map(|run| (i, run)))
     }
+
+    fn len(&self) -> usize {
+        self.0[..=self.top_power()]
+            .iter()
+            .filter(|r| r.is_some())
+            .count()
+    }
 }
 
-/// A power indexed stack
+/// A simple [`RunStack`] implementation, storing each stack with its power.
 #[derive(Debug)]
-struct PowerIndexedStack(Vec<(usize, Run)>);
+struct Stack(Vec<(usize, Run)>);
 
-impl RunStack for PowerIndexedStack {
+impl RunStack for Stack {
     fn new(capacity: usize) -> Self {
         Self(Vec::with_capacity(capacity))
     }
@@ -409,7 +469,10 @@ impl RunStack for PowerIndexedStack {
 
     fn push(&mut self, run: Run, power: usize) {
         assert!(power >= self.top_power());
-        assert!(!self.0.spare_capacity_mut().is_empty());
+        assert!(
+            !self.0.spare_capacity_mut().is_empty(),
+            "We should not exceed the initial capacity"
+        );
 
         self.0.push((power, run));
     }
@@ -418,8 +481,6 @@ impl RunStack for PowerIndexedStack {
         &'this mut self,
         power: usize,
     ) -> impl Iterator<Item = (usize, Run)> + 'this {
-        assert!(power <= self.top_power());
-
         std::iter::from_fn(move || {
             if self.top_power() > power {
                 self.0.pop()
@@ -432,10 +493,15 @@ impl RunStack for PowerIndexedStack {
     fn pop_all(self) -> impl Iterator<Item = (usize, Run)> {
         self.0.into_iter().rev()
     }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
-/// Node power calculation
+/// Node power calculation methods.
 pub mod node_power {
+    /// Defines a node power calculation method, for `K` way merges.
     pub trait NodePowerMethod<const K: usize> {
         /// The max `n` up to which this method words correctly
         const MAX_N: usize;
@@ -443,11 +509,12 @@ pub mod node_power {
         /// The string representation of this node power method
         fn display() -> String;
 
-        // TODO: accurate?
-        /// Calculate the node power of run b?
+        /// Calculate the node power of `run_a`.
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize;
     }
 
+    /// Trivial [`NodePowerMethod`] using floating point calculations.
+    #[allow(dead_code, reason = "Currently not used for experiments")]
     #[derive(Debug, Clone, Copy)]
     pub struct Trivial;
 
@@ -459,11 +526,16 @@ pub mod node_power {
             "trivial".to_string()
         }
 
-        #[expect(clippy::absurd_extreme_comparisons)]
+        #[expect(
+            clippy::as_conversions,
+            reason = "The accuracy should not matter for very large values"
+        )]
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
-            assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
+            #[expect(clippy::absurd_extreme_comparisons)]
+            {
+                assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
+            }
 
-            // NOTE: This is correct under the assumption, that usize is not larger than f64?
             let a = (run_a.start as f64 + run_a.len() as f64 / 2.0) / n as f64;
             let b = (run_b.start as f64 + run_b.len() as f64 / 2.0) / n as f64;
             let mut power = 0;
@@ -480,18 +552,19 @@ pub mod node_power {
         }
     }
 
+    /// A [`NodePowerMethod`] using a simple division loop.
+    #[allow(dead_code, reason = "Currently not used for experiments")]
     #[derive(Debug, Clone, Copy)]
     pub struct DivisionLoop;
 
     impl<const K: usize> NodePowerMethod<K> for DivisionLoop {
-        // FIXME: what is correct here?
+        // NOTE: is this correct?
         const MAX_N: usize = usize::MAX.isqrt();
 
         fn display() -> String {
             "division-loop".to_string()
         }
 
-        // TODO: check if this is correct
         fn node_power(n: usize, run_a: super::Run, run_b: super::Run) -> usize {
             assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
 
@@ -500,7 +573,7 @@ pub mod node_power {
             let mut b = 2 * run_b.start + run_b.len();
             let mut power = 0;
 
-            // FIXME: how should this handle overflows?
+            // TODO: Investigate with regards to overflows?
             while b - a <= n2 && a / n2 == b / n2 {
                 power += 1;
                 a *= K;
@@ -511,12 +584,17 @@ pub mod node_power {
         }
     }
 
+    /// A [`NodePowerMethod`] using a loop with bitwise operations.
+    ///
+    /// # Note
+    ///
+    /// This method only works for `K` being a power of 2.
+    #[allow(dead_code, reason = "Currently not used for experiments")]
     #[derive(Debug, Clone, Copy)]
     pub struct BitwiseLoop;
 
     impl<const K: usize> NodePowerMethod<K> for BitwiseLoop {
         const MAX_N: usize = {
-            // TODO: is this correct?
             assert!(K > 1);
             assert!(K.count_ones() == 1, "K has to be a power of 2");
 
@@ -556,14 +634,16 @@ pub mod node_power {
         }
     }
 
-    // TODO: what about node_power_clz_unconstrained
-
+    /// A [`NodePowerMethod`] utilizing the most significant set bit, without use of a loop.
+    ///
+    /// # Note
+    ///
+    /// This method only works for `K` being a power of 2.
     #[derive(Debug, Clone, Copy)]
     pub struct MostSignificantSetBit;
 
     impl<const K: usize> NodePowerMethod<K> for MostSignificantSetBit {
         const MAX_N: usize = {
-            // TODO: is this correct?
             assert!(K > 1);
             assert!(K.count_ones() == 1, "K has to be a power of 2");
 
@@ -578,16 +658,17 @@ pub mod node_power {
             assert!(n <= <Self as NodePowerMethod<K>>::MAX_N);
 
             const HALF_MASK: usize = usize::MAX >> (usize::BITS / 2);
+            const HALF_BITS: u32 = usize::BITS / 2;
 
             let factor: usize = K.trailing_zeros().try_into().unwrap();
 
             let l2 = run_a.start + run_a.end;
             let r2 = run_b.start + run_b.end;
 
-            let a = ((l2 << 30) / n) & HALF_MASK;
-            let b = ((r2 << 30) / n) & HALF_MASK;
+            let a = ((l2 << (HALF_BITS - 2)) / n) & HALF_MASK;
+            let b = ((r2 << (HALF_BITS - 2)) / n) & HALF_MASK;
 
-            (((a ^ b).leading_zeros() - usize::BITS / 2) as usize - 1) / factor + 1
+            (usize::try_from((a ^ b).leading_zeros() - usize::BITS / 2).unwrap() - 1) / factor + 1
         }
     }
 }
