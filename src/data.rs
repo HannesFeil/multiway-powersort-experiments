@@ -14,7 +14,7 @@ pub struct CompareFirstEntry;
 
 impl<T: Ord, const N: usize> BlobComparisonMethod<T, N> for CompareFirstEntry {
     fn compare(a: &[T; N], b: &[T; N]) -> std::cmp::Ordering {
-        a.first().cmp(&b.first())
+        a[0].cmp(&b[0])
     }
 }
 

@@ -305,15 +305,6 @@ declare_variants! {
                 { powersort::DEFAULT_MIN_RUN_LENGTH },
                 { powersort::DEFAULT_ONLY_INCREASING_RUNS },
             >,
-            powersort::MultiwayPowerSort<
-                powersort::DefaultNodePowerMethod,
-                powersort::DefaultInsertionSort,
-                merging::two_way::CopyBoth,
-                powersort::DefaultBufGuardFactory,
-                2,
-                { powersort::DEFAULT_MIN_RUN_LENGTH },
-                { powersort::DEFAULT_ONLY_INCREASING_RUNS },
-            >,
         ],
     }
 }
