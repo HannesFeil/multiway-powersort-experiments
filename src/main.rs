@@ -1,4 +1,8 @@
-#![warn(clippy::as_conversions, reason = "Check for scrutiny")]
+#![warn(
+    clippy::as_conversions,
+    clippy::missing_safety_doc,
+    reason = "Check for scrutiny"
+)]
 
 use std::io::Write;
 

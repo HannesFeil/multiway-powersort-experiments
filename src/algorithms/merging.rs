@@ -1,5 +1,4 @@
-//! contains structs implementing [`MergingMethod`], which implement various strategies
-//! for merging adjacent runs in a slice.
+//! Contains various implementations for merging adjacent runs in slices.
 
 pub mod multi_way;
 pub mod two_way;
@@ -8,15 +7,16 @@ pub use multi_way::MultiMergingMethod;
 pub use two_way::MergingMethod;
 
 /// Contains various utility methods for the detection of runs.
+/// Contains various utility methods for the detection of runs.
 pub mod util {
     /// Iterates through `iter` and returns the first element `current` with the proceeding element
-    /// `next`, such that `f(current, next) == true` and returns `Some(current)`
+    /// `next`, such that `f(current, next) == true` and returns `Some(current)`.
     ///
     /// If `f(current, next)` is never true, returns `Ok(None)`.
     ///
     /// # Errors
     ///
-    /// Returns `Err` if `iter` returns `None` at the start
+    /// Returns `Err(())` if `iter` instantly returns `None`.
     fn find_first_sequentially<T>(
         mut iter: impl Iterator<Item = T>,
         mut f: impl FnMut(&T, &T) -> bool,
@@ -34,34 +34,32 @@ pub mod util {
         Ok(None)
     }
 
-    // TODO: update comments
-
-    /// Returns the largest `index`, such that `slice[..index]` is weakly increasing
+    /// Returns the largest `index`, such that `slice[..index]` is weakly increasing.
     pub fn weakly_increasing_prefix_index<T: Ord>(slice: &[T]) -> usize {
         let iter = slice.iter().enumerate();
 
-        // Find the index of the first element breaking the sequence
+        // Find the index where the next element breaks the run
         match find_first_sequentially(iter, |(_, current), (_, next)| current > next) {
             // Found the index
             Ok(Some((index, _))) => index + 1,
-            // Sequence is not broken, split into full and empty slice
+            // Run not broken, return length
             Ok(None) => slice.len(),
-            // Slice is empty, split into two empty slices
+            // Slice is empty
             Err(()) => 0,
         }
     }
 
-    /// Returns the smallest `index`, such that `slice[index..]` is weakly increasing
+    /// Returns the smallest `index`, such that `slice[index..]` is weakly increasing.
     pub fn weakly_increasing_suffix_index<T: Ord>(slice: &[T]) -> usize {
         let iter = slice.iter().enumerate().rev();
 
-        // Find the index of the first element breaking the sequence
+        // Find the index of the first element breaking the run
         match find_first_sequentially(iter, |(_, current), (_, previous)| current < previous) {
             // Found the index
             Ok(Some((index, _))) => index,
-            // Sequence is not broken, split into empty and full slice
+            // Run is not broken, return start
             Ok(None) => 0,
-            // Slice is empty, split into two empty slices
+            // Slice is empty
             Err(()) => 0,
         }
     }
@@ -70,13 +68,13 @@ pub mod util {
     pub fn strictly_decreasing_prefix_index<T: Ord>(slice: &[T]) -> usize {
         let iter = slice.iter().enumerate();
 
-        // Find the index of the first element breaking the sequence
+        // Find the index where the next element breaks the run
         match find_first_sequentially(iter, |(_, current), (_, next)| current <= next) {
             // Found the index
             Ok(Some((index, _))) => index + 1,
-            // Sequence is not broken, split into full and empty slice
+            // Run is not broken, return length
             Ok(None) => slice.len(),
-            // Slice is empty, split into two empty slices
+            // Slice is empty
             Err(()) => 0,
         }
     }
@@ -89,32 +87,39 @@ pub mod util {
         match find_first_sequentially(iter, |(_, current), (_, previous)| current >= previous) {
             // Found the index
             Ok(Some((index, _))) => index,
-            // Sequence is not found, split into empty and full slice
+            // Run is not broken, return start
             Ok(None) => 0,
-            // Slice is empty, split into two empty slices
+            // Slice is empty
             Err(()) => 0,
         }
     }
 
-    // TODO: add returned enum
-
+    /// Indicates if a weakly increasing or strictly decreasing run was found, see
+    /// [`weakly_increasing_or_strictly_decreasing_index`].
     #[derive(Debug, Clone, Copy)]
     pub enum RunOrdering {
+        /// The run is weakly increasing.
         WeaklyIncreasing,
+        /// The run is strictly decreasing.
         StrictlyDecreasing,
     }
 
-    /// Returns the largest (`index`, `decreasing`), such that `slice[index..]` is weakly increasing or
-    /// strictly decreasing. `decreasing` indicating if the found sequence is strictly decreasing.
+    /// Returns the largest index such that `slice[..index]` is either weakly increasing or
+    /// strictly decreasing.
+    ///
+    /// Additionally, returns the [`RunOrdering`].
     pub fn weakly_increasing_or_strictly_decreasing_index<T: Ord>(
         slice: &mut [T],
     ) -> (usize, RunOrdering) {
+        // Weakly increasing is the default case
         if slice.len() < 2 {
             return (slice.len(), RunOrdering::WeaklyIncreasing);
         }
 
+        // Split of first element
         let (first, rest) = slice.split_first().unwrap();
 
+        // Look at next and choose either weakly increasing or strictly decreasing search.
         if first > rest.first().unwrap() {
             (
                 strictly_decreasing_prefix_index(rest) + 1,
@@ -142,7 +147,7 @@ impl<T> BufGuard<T> for Vec<T> {
         #[cfg(feature = "counters")]
         #[expect(
             clippy::as_conversions,
-            reason = "This will always be accurate (capacity will not realistically be too high)"
+            reason = "This will always be accurate (capacity will realistically not be too high)"
         )]
         crate::GLOBAL_COUNTERS.merge_alloc.increase(capacity as u64);
 
@@ -154,6 +159,7 @@ impl<T> BufGuard<T> for Vec<T> {
     }
 }
 
+/// A thin wrapper around a pointer range, offering some convenience methods.
 #[derive(Debug)]
 pub struct Run<T>(std::ops::Range<*mut T>);
 
@@ -164,21 +170,26 @@ impl<T> Clone for Run<T> {
 }
 
 impl<T> Run<std::mem::MaybeUninit<T>> {
-    // Assume all elements in the contained range are initialized.
-    pub unsafe fn assume_init(self) -> Run<T> {
-        Run(self.0.start as *mut T..self.0.end as *mut T)
+    /// Assume all elements in the contained range are initialized.
+    pub fn assume_init(self) -> Run<T> {
+        Run(self.0.start.cast()..self.0.end.cast())
     }
 }
 
 impl<T> Run<T> {
+    /// Returns the start pointer.
     pub fn start(&self) -> *mut T {
         self.0.start
     }
 
+    /// Returns the end pointer.
     pub fn end(&self) -> *mut T {
         self.0.end
     }
 
+    /// Returns the length of this pointer range (i.e. the number of elements contained in)
+    /// [start, end).
+    ///
     /// # Safety
     ///
     /// All safety conditions of `<*mut T>::offset_from_unsigned()` must hold for
@@ -186,25 +197,36 @@ impl<T> Run<T> {
     pub unsafe fn len(&self) -> usize {
         debug_assert!(self.start() <= self.end());
 
+        // SAFETY: see method doc
         unsafe { self.0.end.offset_from_unsigned(self.0.start) }
     }
 
+    /// Returns whether this pointer range is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
+    /// Creates a temporary slice view into the pointer range.
+    ///
+    /// # Safety
+    ///
+    /// The underlying pointer range must be a valid slice, and no aliasing view can exist.
+    ///
+    /// See [`std::slice::from_raw_parts_mut()`] for more information and conditions.
     pub unsafe fn as_slice(&mut self) -> &mut [T] {
+        // SAFETY: see method doc
         unsafe { std::slice::from_raw_parts_mut(self.start(), self.len()) }
     }
 
     /// Copies `count` elements from the beginning of this run to the beginning of the other run
-    /// and moves both run's starts after the copied elements
+    /// and moves both run's starts after the copied elements.
     ///
     /// # Safety
     ///
     /// All safety conditions of [`std::ptr::copy_nonoverlapping()`] must hold for
     /// [`self.start()`](Self::start()) and [`other.start()`](Self::start()) and `count`.
     pub unsafe fn copy_nonoverlapping_prefix_to(&mut self, other: &mut Self, count: usize) {
+        // SAFETY: see method doc
         unsafe {
             debug_assert!(self.len() >= count && other.len() >= count);
 
@@ -216,13 +238,14 @@ impl<T> Run<T> {
     }
 
     /// Copies `count` elements from the beginning of this run to the beginning of the other run
-    /// and moves both run's starts after the copied elements
+    /// and moves both run's starts after the copied elements.
     ///
     /// # Safety
     ///
     /// All safety conditions of [`std::ptr::copy()`] must hold for
     /// [`self.start()`](Self::start()) and [`other.start()`](Self::start()) and `count`.
     pub unsafe fn copy_prefix_to(&mut self, other: &mut Self, count: usize) {
+        // SAFETY: see method doc
         unsafe {
             debug_assert!(self.len() >= count && other.len() >= count);
 
@@ -234,13 +257,14 @@ impl<T> Run<T> {
     }
 
     /// Copies `count` elements from the end of this run to the end of the other run
-    /// and moves both run's ends before the copied elements
+    /// and moves both run's ends before the copied elements.
     ///
     /// # Safety
     ///
     /// All safety conditions of [`std::ptr::copy_nonoverlapping()`] must hold for
     /// [`self.end().sub(count)`](Self::end()) and [`other.end().sub(count)`](Self::end()) and `count`.
     pub unsafe fn copy_nonoverlapping_suffix_to(&mut self, other: &mut Self, count: usize) {
+        // SAFETY: see method doc
         unsafe {
             debug_assert!(self.len() >= count && other.len() >= count);
 
@@ -252,13 +276,14 @@ impl<T> Run<T> {
     }
 
     /// Copies `count` elements from the end of this run to the end of the other run
-    /// and moves both run's ends before the copied elements
+    /// and moves both run's ends before the copied elements.
     ///
     /// # Safety
     ///
     /// All safety conditions of [`std::ptr::copy()`] must hold for
     /// [`self.end().`](Self::end()) and [`other.end()`](Self::end()) and `count`.
     pub unsafe fn copy_suffix_to(&mut self, other: &mut Self, count: usize) {
+        // SAFETY: see method doc
         unsafe {
             debug_assert!(self.len() >= count && other.len() >= count);
 
@@ -270,10 +295,15 @@ impl<T> Run<T> {
     }
 }
 
+/// A drop guard used to write all remaining elements in `runs` are written to `output` when
+/// dropped.
 pub struct MergingDropGuard<T, const N: usize> {
+    /// The runs which will be written to `output`.
     pub runs: [Run<T>; N],
+    /// The output run, into which all elements from `runs` are written.
     pub output: Run<T>,
-    sealed: std::marker::PhantomData<()>,
+    /// Prevent construction without [`Self::new()`].
+    _sealed: std::marker::PhantomData<()>,
 }
 
 impl<T, const N: usize> MergingDropGuard<T, N> {
@@ -284,28 +314,36 @@ impl<T, const N: usize> MergingDropGuard<T, N> {
     /// # Safety
     ///
     /// The sum of the length of the remaining `runs` must be smaller or equal to the length of
-    /// `output`. The pointer ranges must be valid to read from and write to respectively.
-    /// This invariant must not be invalidated while mutating any of the public fields.
+    /// `output`. The pointer ranges must be valid to be read from and written to respectively.
+    /// This invariant must not be invalidated when mutating any of the public fields.
     /// To disarm the guard see [Self::disarm()].
     pub unsafe fn new(runs: [Run<T>; N], output: Run<T>) -> Self {
         Self {
             runs,
             output,
-            sealed: std::marker::PhantomData,
+            _sealed: std::marker::PhantomData,
         }
     }
 
-    /// Disarms this guard and returns it's components `(runs, output)`.
+    /// Disarms this guard and returns its components `(runs, output)`.
     ///
-    /// This is safe, since no guarantees are given and any unsafe operations during drop are skipped.
+    /// This is safe, since we only do work on drop.
     pub fn disarm(self) -> ([Run<T>; N], Run<T>) {
-        let dont_drop = std::mem::ManuallyDrop::new(self);
-        let runs = dont_drop.runs.clone();
-        let output = dont_drop.output.clone();
-        (runs, output)
+        // SAFETY: we make sure never to drop `self`, and since we consume `self` this is the only
+        // access to `self.runs` and `self.output`.
+        unsafe {
+            // Make sure to never drop self
+            let dont_drop = std::mem::ManuallyDrop::new(self);
+
+            // Extract the relevant fields
+            let runs = std::ptr::read(&raw const dont_drop.runs);
+            let output = std::ptr::read(&raw const dont_drop.output);
+
+            (runs, output)
+        }
     }
 
-    /// Returns whether all runs are empty and there is nothing to clean up
+    /// Returns whether all runs are empty and there is nothing to clean up.
     pub fn is_empty(&self) -> bool {
         self.runs.iter().all(Run::is_empty)
     }
@@ -313,10 +351,11 @@ impl<T, const N: usize> MergingDropGuard<T, N> {
 
 impl<T, const N: usize> Drop for MergingDropGuard<T, N> {
     fn drop(&mut self) {
-        for run in self.runs.iter_mut() {
-            if !run.is_empty() {
-                // SAFETY: See condition on [`Self::new()`]
-                unsafe {
+        // SAFETY: See condition on [`Self::new()`]
+        unsafe {
+            // Iterate through all runs and write them consecutively into output
+            for run in self.runs.iter_mut() {
+                if !run.is_empty() {
                     run.copy_prefix_to(&mut self.output, run.len());
                 }
             }
