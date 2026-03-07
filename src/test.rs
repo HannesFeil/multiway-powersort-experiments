@@ -315,3 +315,220 @@ pub fn test_random_stable_sorted<
         "Sort should be stable otherwise this test should return earlier"
     );
 }
+
+/// Utility methods for testing merging methods.
+#[cfg(test)]
+pub mod merging {
+    use crate::algorithms::merging::BufGuard as _;
+    use rand::{Rng as _, RngCore as _};
+
+    /// How big the test arrays should be.
+    const TEST_SIZE: usize = 100;
+    /// How many times to run each test.
+    const TEST_RUNS: usize = 100;
+
+    /// Tests merging an empty slice.
+    pub fn test_empty_merge<
+        T: crate::algorithms::merging::MultiMergingMethod<K>,
+        const K: usize,
+    >() {
+        let mut elements = [(); 0];
+        let mut buffer = <Vec<_> as crate::algorithms::merging::BufGuard<_>>::with_capacity(
+            T::required_capacity(TEST_SIZE),
+        );
+
+        // This should not panic nor cause UB
+        T::merge(&mut elements, &[0], buffer.as_uninit_slice_mut());
+        T::merge(&mut elements, &[], buffer.as_uninit_slice_mut());
+    }
+
+    /// Splits the slice into random sorted runs of random lengths (at least 2, at most `K`).
+    fn generate_random_runs<T: Ord, const K: usize, const SORT: bool>(
+        slice: &mut [T],
+        run_lengths: &mut Vec<usize>,
+        rng: &mut crate::test::Rng,
+    ) {
+        run_lengths.clear();
+        let num_splits = rng.random_range(1..K);
+
+        // Sort the runs and collect their lengths
+        let mut last = 0;
+        for i in 0..num_splits {
+            let run_len = rng.random_range(1..TEST_SIZE - last - (num_splits - i));
+
+            if SORT {
+                slice[last..last + run_len].sort();
+            }
+
+            run_lengths.push(run_len);
+            last += run_len;
+        }
+
+        if SORT {
+            slice[last..].sort();
+        }
+    }
+
+    /// Tests that random runs are correctly merged.
+    pub fn test_correct_merge<
+        T: crate::algorithms::merging::MultiMergingMethod<K>,
+        const K: usize,
+    >() {
+        let mut rng = crate::test::test_rng();
+        let mut buffer = <Vec<_> as crate::algorithms::merging::BufGuard<_>>::with_capacity(
+            T::required_capacity(TEST_SIZE),
+        );
+        let mut run_lengths = Vec::with_capacity(K - 1);
+
+        // Test random runs
+        for run in 0..TEST_RUNS {
+            let mut elements: Box<[usize]> = (0..TEST_SIZE)
+                .map(|_| rng.random_range(0..usize::MAX))
+                .collect();
+
+            generate_random_runs::<_, K, true>(&mut elements, &mut run_lengths, &mut rng);
+
+            T::merge(&mut elements, &run_lengths, buffer.as_uninit_slice_mut());
+
+            assert!(
+                elements.is_sorted(),
+                "Resulting elements were not sorted by {name} in run {run}",
+                name = T::display(),
+            );
+        }
+    }
+
+    /// Tests that runs are merged correctly and stable.
+    pub fn test_correct_stable_merge<
+        T: crate::algorithms::merging::MultiMergingMethod<K>,
+        const K: usize,
+    >() {
+        let mut rng = crate::test::test_rng();
+        let mut buffer = <Vec<_> as crate::algorithms::merging::BufGuard<_>>::with_capacity(
+            T::required_capacity(TEST_SIZE),
+        );
+        let mut run_lengths = Vec::with_capacity(K - 1);
+
+        // Test random runs
+        for run in 0..TEST_RUNS {
+            let mut elements: Box<[_]> = crate::test::IndexedOrdered::map_iter(
+                (0..TEST_SIZE).map(|_| rng.random_range(0..TEST_SIZE / 4)),
+            )
+            .collect();
+
+            generate_random_runs::<_, K, true>(&mut elements, &mut run_lengths, &mut rng);
+
+            T::merge(&mut elements, &run_lengths, buffer.as_uninit_slice_mut());
+
+            match crate::test::IndexedOrdered::is_stable_sorted(elements.iter()) {
+                Ok(false) if !T::IS_STABLE => return,
+                Ok(stable) => assert!(
+                    stable,
+                    "Resulting elements were not sorted stable by {name} in run {run}",
+                    name = T::display(),
+                ),
+                Err(()) => panic!(
+                    "Elements were not sorted at all by {name} in run {run}",
+                    name = T::display(),
+                ),
+            }
+        }
+
+        assert!(T::IS_STABLE);
+    }
+
+    /// Runs `M` with [`crate::test::RandomOrdered`] elements and
+    /// [`crate::test::MaybePanickingOrdered`] elements, mostly useful for running under MIRI.
+    pub fn test_soundness_merge<
+        T: crate::algorithms::merging::MultiMergingMethod<K>,
+        const K: usize,
+    >() {
+        let mut rng = crate::test::test_rng();
+        let mut buffer = <Vec<_> as crate::algorithms::merging::BufGuard<_>>::with_capacity(
+            T::required_capacity(TEST_SIZE),
+        );
+        let mut maybe_panicking_buffer =
+            <Vec<_> as crate::algorithms::merging::BufGuard<_>>::with_capacity(
+                T::required_capacity(TEST_SIZE),
+            );
+        let mut maybe_panicking_random_buffer =
+            <Vec<_> as crate::algorithms::merging::BufGuard<_>>::with_capacity(
+                T::required_capacity(TEST_SIZE),
+            );
+        let mut run_lengths = Vec::with_capacity(K - 1);
+
+        // Test RandomOrdered runs
+        for _ in 0..TEST_RUNS {
+            let mut elements: Box<[crate::test::RandomOrdered]> =
+                crate::test::RandomOrdered::new_iter(rng.next_u64())
+                    .take(TEST_SIZE)
+                    .collect();
+
+            generate_random_runs::<_, K, false>(&mut elements, &mut run_lengths, &mut rng);
+
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                T::merge(&mut elements, &run_lengths, buffer.as_uninit_slice_mut());
+            }));
+
+            drop(elements);
+        }
+
+        // Test MaybePanickingOrdered runs
+        for _ in 0..TEST_RUNS {
+            let mut elements: Box<[u32]> = std::iter::repeat_with(|| rng.random())
+                .take(TEST_SIZE)
+                .collect();
+
+            // Remember original elements
+            let mut elements_clone = elements.clone();
+            elements_clone.sort();
+
+            generate_random_runs::<_, K, true>(&mut elements, &mut run_lengths, &mut rng);
+
+            let mut elements: Box<[crate::test::MaybePanickingOrdered<TEST_SIZE, u32>]> =
+                crate::test::MaybePanickingOrdered::map_iter(elements.into_iter(), rng.next_u64())
+                    .collect();
+
+            // The types are not actually unwind safe but must not trigger UB anyway
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                T::merge(
+                    &mut elements,
+                    &run_lengths,
+                    maybe_panicking_buffer.as_uninit_slice_mut(),
+                );
+            }));
+
+            // Make sure no elements got lost or duplicated
+            let mut collected_ordered: Box<[u32]> = elements
+                .into_iter()
+                .map(crate::test::MaybePanickingOrdered::into_inner)
+                .collect();
+            collected_ordered.sort();
+            assert!(collected_ordered.into_iter().eq(elements_clone.into_iter()));
+        }
+
+        // Test MaybePanickingOrdered RandomOrdered runs
+        for _ in 0..TEST_RUNS {
+            let mut elements: Box<
+                [crate::test::MaybePanickingOrdered<TEST_SIZE, crate::test::RandomOrdered>],
+            > = crate::test::MaybePanickingOrdered::map_iter(
+                crate::test::RandomOrdered::new_iter(rng.next_u64()).take(TEST_SIZE),
+                crate::test::TEST_SEED,
+            )
+            .collect();
+
+            generate_random_runs::<_, K, false>(&mut elements, &mut run_lengths, &mut rng);
+
+            // The types are not actually unwind safe but must not trigger UB anyway
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                T::merge(
+                    &mut elements,
+                    &run_lengths,
+                    maybe_panicking_random_buffer.as_uninit_slice_mut(),
+                );
+            }));
+
+            drop(elements);
+        }
+    }
+}
