@@ -80,6 +80,11 @@ impl<const LIKELIHOOD: usize, T: Ord> MaybePanickingOrdered<LIKELIHOOD, T> {
 
         iter.map(move |element| Self(rng.clone(), element))
     }
+
+    /// Consumes the wrapper and returns the inner `T`.
+    pub fn into_inner(self) -> T {
+        self.1
+    }
 }
 
 // The following implementations are intentionally 'bad' (see RandomOrdered)

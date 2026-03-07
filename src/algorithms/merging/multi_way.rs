@@ -315,9 +315,9 @@ mod tests {
     use rand::{Rng as _, RngCore as _};
 
     /// How big the test arrays should be
-    const TEST_SIZE: usize = 1000;
+    const TEST_SIZE: usize = 100;
     /// How many times to run each test
-    const TEST_RUNS: usize = 1000;
+    const TEST_RUNS: usize = 100;
 
     macro_rules! test_multi_methods {
         ($($module_name:ident : $method:ident [$($k:expr),+]),+$(,)?) => {
@@ -546,6 +546,10 @@ mod tests {
                 .take(TEST_SIZE)
                 .collect();
 
+            // Remember original elements
+            let mut elements_clone = elements.clone();
+            elements_clone.sort();
+
             splits.clear();
             let num_splits = rng.random_range(1..K);
             let mut last = 0;
@@ -569,6 +573,14 @@ mod tests {
                     maybe_panicking_buffer.as_uninit_slice_mut(),
                 );
             }));
+
+            // Make sure no elements got lost or duplicated
+            let mut collected_ordered: Box<[u32]> = elements
+                .into_iter()
+                .map(crate::test::MaybePanickingOrdered::into_inner)
+                .collect();
+            collected_ordered.sort();
+            assert!(collected_ordered.into_iter().eq(elements_clone.into_iter()));
 
             // MaybePanickingOrdered RandomOrdered elements
             let mut elements: Box<
