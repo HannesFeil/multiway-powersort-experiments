@@ -1,18 +1,18 @@
-//! The Quicksort implementation
+//! The Quicksort implementation.
 
-/// The default [`super::RngFactory`] to use
+/// The default [`super::RngFactory`] to use.
 pub type DefaultRngFactory = super::DefaultRngFactory;
 
-/// The default insertion sort to use
+/// The default insertion sort to use.
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
-/// The default `INSERTION_THRESHOLD` to use
+/// The default `INSERTION_THRESHOLD` to use.
 pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
 
-/// The default `NINTHER_THRESHOLD` to use
+/// The default `NINTHER_THRESHOLD` to use.
 pub const DEFAULT_NINTHER_THRESHOLD: usize = 128;
 
-/// The default `CHECK_SORTED` to use
+/// The default `CHECK_SORTED` to use.
 pub const DEFAULT_CHECK_SORTED: bool = false;
 
 /// The Quicksort [`super::Sort`].

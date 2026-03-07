@@ -1,23 +1,23 @@
-//! The mergesort implementations
+//! The mergesort implementations.
 
 use crate::algorithms::merging::BufGuard as _;
 
-/// The default insertion sort to use
+/// The default insertion sort to use.
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
-/// The default [`super::merging::two_way::MergingMethod`] to use
+/// The default [`super::merging::MergingMethod`] to use.
 pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
-/// The default [`super::BufGuardFactory`] to use
+/// The default [`super::BufGuardFactory`] to use.
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
 
-/// The default `BOTTOM_UP` to use
+/// The default `BOTTOM_UP` to use.
 pub const DEFAULT_BOTTOM_UP: bool = false;
 
-/// The default `INSERTION_THRESHOLD` to use
+/// The default `INSERTION_THRESHOLD` to use.
 pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
 
-/// The default `CHECK_SORTED` to use
+/// The default `CHECK_SORTED` to use.
 pub const DEFAULT_CHECK_SORTED: bool = true;
 
 /// Mergesort [`super::Sort`].
@@ -30,7 +30,7 @@ pub const DEFAULT_CHECK_SORTED: bool = true;
 /// - `CHECK_SORTED` enables a check for pre-sortedness before merging two runs.
 pub struct MergeSort<
     I: super::Sort = DefaultInsertionSort,
-    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
+    M: super::merging::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const BOTTOM_UP: bool = DEFAULT_BOTTOM_UP,
     const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
@@ -43,7 +43,7 @@ pub struct MergeSort<
 
 impl<
     I: super::Sort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const BOTTOM_UP: bool,
     const INSERTION_THRESHOLD: usize,
@@ -84,7 +84,7 @@ impl<
 
 impl<
     I: super::Sort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const BOTTOM_UP: bool,
     const INSERTION_THRESHOLD: usize,

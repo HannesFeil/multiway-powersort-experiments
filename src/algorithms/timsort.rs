@@ -1,11 +1,11 @@
-//! The Timsort implementation
+//! The Timsort implementation.
 
 use super::merging::BufGuard as _;
 
 /// The default insertion sort to use.
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort<true>;
 
-/// The default [`super::merging::two_way::MergingMethod`] to use.
+/// The default [`super::merging::MergingMethod`] to use.
 pub type DefaultMergingMethod = super::merging::two_way::Galloping;
 
 /// The default [`super::BufGuardFactory`] to use.
@@ -17,12 +17,12 @@ pub const DEFAULT_MIN_MERGE: usize = 32;
 /// The Timsort [`super::Sort`].
 ///
 /// - `I` is the insertion sort used for small slices.
-/// - `M` is the [`super::merging::two_way::MergingMethod`] used to merge slices.
+/// - `M` is the [`super::merging::MergingMethod`] used to merge slices.
 /// - `B` is the [`super::BufGuardFactory`] used to create the merging buffer.
 /// - `MIN_MERGE` determines the maximum slice length threshold to be sorted with `I`.
 pub struct TimSort<
     I: super::PostfixSort = DefaultInsertionSort,
-    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
+    M: super::merging::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const MIN_MERGE: usize = DEFAULT_MIN_MERGE,
 >(
@@ -33,7 +33,7 @@ pub struct TimSort<
 
 impl<
     I: super::PostfixSort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_MERGE: usize,
 > super::Sort for TimSort<I, M, B, MIN_MERGE>
@@ -75,7 +75,7 @@ struct Run {
 
 impl<
     I: super::PostfixSort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_MERGE: usize,
 > TimSort<I, M, B, MIN_MERGE>

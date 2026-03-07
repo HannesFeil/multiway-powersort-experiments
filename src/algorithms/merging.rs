@@ -4,6 +4,10 @@
 pub mod multi_way;
 pub mod two_way;
 
+pub use multi_way::MultiMergingMethod;
+pub use two_way::MergingMethod;
+
+/// Contains various utility methods for the detection of runs.
 pub mod util {
     /// Iterates through `iter` and returns the first element `current` with the proceeding element
     /// `next`, such that `f(current, next) == true` and returns `Some(current)`

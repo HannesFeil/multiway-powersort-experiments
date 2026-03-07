@@ -1,32 +1,32 @@
-//! The Peeksort implementation
+//! The Peeksort implementation.
 
 use crate::algorithms::merging::BufGuard as _;
 
-/// The default insertion sort to use
+/// The default insertion sort to use.
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
-/// The default [`super::merging::MergingMethod`] to use
+/// The default [`super::merging::MergingMethod`] to use.
 pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
-/// The default BufGuardFactory to use
+/// The default BufGuardFactory to use.
 pub type DefaultBufGuardFactory = super::DefaultBufGuardFactory;
 
-/// The default `INSERTION_THRESHOLD` to use
+/// The default `INSERTION_THRESHOLD` to use.
 pub const DEFAULT_INSERTION_THRESHOLD: usize = 24;
 
-/// The default `ONLY_INCREASING_RUNS` to use
+/// The default `ONLY_INCREASING_RUNS` to use.
 pub const DEFAULT_ONLY_INCREASING_RUNS: bool = true;
 
 /// The Peeksort [`super::Sort`].
 ///
 /// - `I` is the insertion sort used for small slices.
-/// - `M` is the [`super::merging::two_way::MergingMethod`] used to merge the runs.
+/// - `M` is the [`super::merging::MergingMethod`] used to merge the runs.
 /// - `B` is the [`super::BufGuardFactory`] used to create the buffer for merging.
 /// - `INSERTION_THRESHOLD` determines the maximum length for sub slices sorted with insertion sort.
 /// - `ONLY_INCREASING_RUNS` indicates whether only increasing existing runs are used.
 pub struct PeekSort<
     I: super::Sort = DefaultInsertionSort,
-    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
+    M: super::merging::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const INSERTION_THRESHOLD: usize = DEFAULT_INSERTION_THRESHOLD,
     const ONLY_INCREASING_RUNS: bool = DEFAULT_ONLY_INCREASING_RUNS,
@@ -38,7 +38,7 @@ pub struct PeekSort<
 
 impl<
     I: super::Sort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -65,7 +65,7 @@ impl<
 
 impl<
     I: super::Sort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -91,7 +91,7 @@ impl<
 
 impl<
     I: super::Sort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const INSERTION_THRESHOLD: usize,
     const ONLY_INCREASING_RUNS: bool,

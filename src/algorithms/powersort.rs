@@ -8,10 +8,10 @@ pub type DefaultNodePowerMethod = node_power::MostSignificantSetBit;
 /// The default insertion sort to use.
 pub type DefaultInsertionSort = super::insertionsort::InsertionSort;
 
-/// The default [`super::merging::two_way::MergingMethod`] to use.
+/// The default [`super::merging::MergingMethod`] to use.
 pub type DefaultMergingMethod = super::merging::two_way::CopyBoth;
 
-/// The default [`super::merging::multi_way::MultiMergingMethod`] to use.
+/// The default [`super::merging::MultiMergingMethod`] to use.
 pub type DefaultMultiMergingMethod = super::merging::multi_way::TournamentTree;
 
 /// The default [`super::BufGuardFactory`] to use.
@@ -33,7 +33,7 @@ pub const DEFAULT_USE_POWER_INDEXED_STACK: bool = false;
 ///
 /// - `N` is the [`noder_power::NodePowerMethod`] used to calculate the node power of runs.
 /// - `I` is the insertion sort used to extend small runs.
-/// - `M` is the [`super::merging::two_way::MergingMethod`] used to merge runs.
+/// - `M` is the [`super::merging::MergingMethod`] used to merge runs.
 /// - `B` is the [`super::BufGuardFactory`] used to create the buffer for merging.
 /// - `MIN_RUN_LENGTH` determines the minimum length up to which runs will be manually extended.
 /// - `ONLY_INCREASING_RUNS` indicates whether only to use preexisting weakly increasing runs.
@@ -41,7 +41,7 @@ pub const DEFAULT_USE_POWER_INDEXED_STACK: bool = false;
 pub struct PowerSort<
     N: node_power::NodePowerMethod<2> = DefaultNodePowerMethod,
     I: super::PostfixSort = DefaultInsertionSort,
-    M: super::merging::two_way::MergingMethod = DefaultMergingMethod,
+    M: super::merging::MergingMethod = DefaultMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const MIN_RUN_LENGTH: usize = DEFAULT_MIN_RUN_LENGTH,
     const ONLY_INCREASING_RUNS: bool = DEFAULT_ONLY_INCREASING_RUNS,
@@ -56,7 +56,7 @@ pub struct PowerSort<
 impl<
     N: node_power::NodePowerMethod<2>,
     I: super::PostfixSort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_RUN_LENGTH: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -103,7 +103,7 @@ type Run = std::ops::Range<usize>;
 impl<
     N: node_power::NodePowerMethod<2>,
     I: super::PostfixSort,
-    M: super::merging::two_way::MergingMethod,
+    M: super::merging::MergingMethod,
     B: super::BufGuardFactory,
     const MIN_RUN_LENGTH: usize,
     const ONLY_INCREASING_RUNS: bool,
@@ -155,7 +155,7 @@ impl<
 ///
 /// - `N` is the [`noder_power::NodePowerMethod`] used to calculate the node power of runs.
 /// - `I` is the insertion sort used to extend small runs.
-/// - `M` is the [`super::merging::multi_way::MultiMergingMethod`] used to merge runs.
+/// - `M` is the [`super::merging::MultiMergingMethod`] used to merge runs.
 /// - `B` is the [`super::BufGuardFactory`] used to create the buffer for merging.
 /// - `MERGE_K_RUNS` determines how many runs are merged together.
 /// - `MIN_RUN_LENGTH` determines the minimum length up to which runs will be manually extended.
@@ -163,7 +163,7 @@ impl<
 pub struct MultiwayPowerSort<
     N: node_power::NodePowerMethod<MERGE_K_RUNS> = DefaultNodePowerMethod,
     I: super::PostfixSort = DefaultInsertionSort,
-    M: super::merging::multi_way::MultiMergingMethod<MERGE_K_RUNS> = DefaultMultiMergingMethod,
+    M: super::merging::MultiMergingMethod<MERGE_K_RUNS> = DefaultMultiMergingMethod,
     B: super::BufGuardFactory = DefaultBufGuardFactory,
     const MERGE_K_RUNS: usize = DEFAULT_MERGE_K_RUNS,
     const MIN_RUN_LENGTH: usize = DEFAULT_MIN_RUN_LENGTH,
@@ -178,7 +178,7 @@ pub struct MultiwayPowerSort<
 impl<
     N: node_power::NodePowerMethod<MERGE_K_RUNS>,
     I: super::PostfixSort,
-    M: super::merging::multi_way::MultiMergingMethod<MERGE_K_RUNS>,
+    M: super::merging::MultiMergingMethod<MERGE_K_RUNS>,
     B: super::BufGuardFactory,
     const MERGE_K_RUNS: usize,
     const MIN_RUN_LENGTH: usize,
@@ -218,7 +218,7 @@ impl<
 impl<
     N: node_power::NodePowerMethod<MERGE_K_RUNS>,
     I: super::PostfixSort,
-    M: super::merging::multi_way::MultiMergingMethod<MERGE_K_RUNS>,
+    M: super::merging::MultiMergingMethod<MERGE_K_RUNS>,
     B: super::BufGuardFactory,
     const MERGE_K_RUNS: usize,
     const MIN_RUN_LENGTH: usize,

@@ -1,6 +1,6 @@
-//! Multiple Insertion sort implementations
+//! Multiple Insertion sort implementations.
 
-/// The default `BINARY` parameter for `InsertionSort`
+/// The default `BINARY` parameter for `InsertionSort`.
 pub const DEFAULT_BINARY: bool = false;
 
 /// The Insertion [`super::Sort`].
@@ -37,7 +37,7 @@ impl<const BINARY: bool> super::PostfixSort for InsertionSort<BINARY> {
 }
 
 impl<const BINARY: bool> InsertionSort<BINARY> {
-    /// Sorts slice using insertion sort, assuming that `slice[0..partition]` is already in order
+    /// Sorts slice using insertion sort, assuming that `slice[0..partition]` is already in order.
     fn insertion_sort_with_partition<T: Ord>(slice: &mut [T], partition_point: usize) {
         assert!(
             (0..=slice.len()).contains(&partition_point),
