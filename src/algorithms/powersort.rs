@@ -679,7 +679,7 @@ mod tests {
 
     use super::*;
 
-    const RUNS: usize = crate::test::DEFAULT_RUNS;
+    const RUNS: usize = crate::test::DEFAULT_TEST_RUNS;
     const TEST_SIZE: usize = crate::test::DEFAULT_TEST_SIZE;
 
     // Test under the assumption, that node_power::Trivial is correct
@@ -724,6 +724,30 @@ mod tests {
         DEFAULT_ONLY_INCREASING_RUNS,
     >;
 
+    mod two_way {
+        use crate::generate_test_suite;
+
+        generate_test_suite! {
+            TEST_SIZE: super::TEST_SIZE;
+            TEST_RUNS: super::RUNS;
+
+            super::PowerSortTrivial,
+            super::PowerSortTrivialPowerIndexedStack,
+        }
+    }
+
+    mod multi_way {
+        use crate::generate_test_suite;
+
+        generate_test_suite! {
+            TEST_SIZE: super::TEST_SIZE;
+            TEST_RUNS: super::RUNS;
+
+            super::PowerSortTrivialMulti4,
+            super::PowerSortTrivialMulti8,
+        }
+    }
+
     macro_rules! test_powers {
         ([$($power:expr),*]: $k:ident => $code:expr) => {
             $(
@@ -734,43 +758,6 @@ mod tests {
                 }
             );*
         };
-    }
-
-    #[test]
-    fn empty() {
-        crate::test::test_empty::<PowerSortTrivial>();
-        crate::test::test_empty::<PowerSortTrivialPowerIndexedStack>();
-    }
-
-    #[test]
-    fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivial>();
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivialPowerIndexedStack>();
-    }
-
-    #[test]
-    fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivial>();
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivialPowerIndexedStack>(
-        );
-    }
-
-    #[test]
-    fn multi_empty() {
-        crate::test::test_empty::<PowerSortTrivialMulti4>();
-        crate::test::test_empty::<PowerSortTrivialMulti8>();
-    }
-
-    #[test]
-    fn multi_random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti4>();
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti8>();
-    }
-
-    #[test]
-    fn multi_random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti4>();
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PowerSortTrivialMulti8>();
     }
 
     #[test]

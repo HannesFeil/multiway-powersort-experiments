@@ -77,26 +77,15 @@ impl<const BINARY: bool> InsertionSort<BINARY> {
 
 #[cfg(test)]
 mod tests {
+    use crate::generate_test_suite;
+
     use super::*;
 
-    const RUNS: usize = 100;
-    const TEST_SIZE: usize = 100;
+    generate_test_suite! {
+        TEST_SIZE: 100;
+        TEST_RUNS: 100;
 
-    #[test]
-    pub fn empty() {
-        crate::test::test_empty::<InsertionSort>();
-        crate::test::test_empty::<InsertionSort<true>>();
-    }
-
-    #[test]
-    pub fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, InsertionSort>();
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, InsertionSort<true>>();
-    }
-
-    #[test]
-    pub fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, InsertionSort>();
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, InsertionSort<true>>();
+        InsertionSort,
+        InsertionSort<true>,
     }
 }

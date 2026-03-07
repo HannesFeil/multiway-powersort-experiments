@@ -247,23 +247,14 @@ impl<
 
 #[cfg(test)]
 mod tests {
+    use crate::generate_test_suite;
+
     use super::*;
 
-    const RUNS: usize = crate::test::DEFAULT_RUNS;
-    const TEST_SIZE: usize = crate::test::DEFAULT_TEST_SIZE;
+    generate_test_suite! {
+        TEST_SIZE: crate::test::DEFAULT_TEST_SIZE;
+        TEST_RUNS: crate::test::DEFAULT_TEST_RUNS;
 
-    #[test]
-    fn empty() {
-        crate::test::test_empty::<TimSort>();
-    }
-
-    #[test]
-    fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, TimSort>();
-    }
-
-    #[test]
-    fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, TimSort>();
+        TimSort,
     }
 }

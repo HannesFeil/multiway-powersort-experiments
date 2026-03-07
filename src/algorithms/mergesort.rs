@@ -148,12 +148,13 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    const RUNS: usize = crate::test::DEFAULT_RUNS;
+    const TEST_RUNS: usize = crate::test::DEFAULT_TEST_RUNS;
     const TEST_SIZE: usize = crate::test::DEFAULT_TEST_SIZE;
 
     mod bottom_up {
+        use crate::generate_test_suite;
+
         use super::super::*;
-        use super::*;
 
         type BottomUpMergeSort = MergeSort<
             DefaultInsertionSort,
@@ -172,28 +173,19 @@ mod tests {
             false,
         >;
 
-        #[test]
-        fn empty() {
-            crate::test::test_empty::<BottomUpMergeSort>();
-            crate::test::test_empty::<BottomUpMergeSortUnchecked>();
-        }
+        generate_test_suite! {
+            TEST_SIZE: super::TEST_SIZE;
+            TEST_RUNS: super::TEST_RUNS;
 
-        #[test]
-        fn random() {
-            crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergeSort>();
-            crate::test::test_random_sorted::<RUNS, TEST_SIZE, BottomUpMergeSortUnchecked>();
-        }
-
-        #[test]
-        fn random_stable() {
-            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergeSort>();
-            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, BottomUpMergeSortUnchecked>();
+            BottomUpMergeSort,
+            BottomUpMergeSortUnchecked,
         }
     }
 
     mod top_down {
+        use crate::generate_test_suite;
+
         use super::super::*;
-        use super::*;
 
         type MergesortUnchecked = MergeSort<
             DefaultInsertionSort,
@@ -204,22 +196,12 @@ mod tests {
             false,
         >;
 
-        #[test]
-        fn empty() {
-            crate::test::test_empty::<MergeSort>();
-            crate::test::test_empty::<MergesortUnchecked>();
-        }
+        generate_test_suite! {
+            TEST_SIZE: super::TEST_SIZE;
+            TEST_RUNS: super::TEST_RUNS;
 
-        #[test]
-        fn random() {
-            crate::test::test_random_sorted::<RUNS, TEST_SIZE, MergeSort>();
-            crate::test::test_random_sorted::<RUNS, TEST_SIZE, MergesortUnchecked>();
-        }
-
-        #[test]
-        fn random_stable() {
-            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, MergeSort>();
-            crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, MergesortUnchecked>();
+            MergeSort,
+            MergesortUnchecked,
         }
     }
 }

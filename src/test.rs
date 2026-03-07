@@ -2,17 +2,17 @@
 
 use rand::{Rng as _, SeedableRng as _, seq::SliceRandom as _};
 
-/// The default test size to use
+/// The default test size to use.
 pub const DEFAULT_TEST_SIZE: usize = 10_000;
-/// The default runs to use
-pub const DEFAULT_RUNS: usize = 100;
+/// The default runs to use.
+pub const DEFAULT_TEST_RUNS: usize = 100;
 
-/// The seed shared by all tests
+/// The seed shared by all tests.
 pub const TEST_SEED: u64 = 0xa8bf17eb656f828d;
-/// The RNG used by each test
+/// The RNG used by each test.
 pub type Rng = rand::rngs::SmallRng;
 
-/// Generate the `Rng` for a test
+/// Generates the `Rng` for a test.
 pub fn test_rng() -> Rng {
     Rng::seed_from_u64(TEST_SEED)
 }
@@ -24,7 +24,7 @@ pub fn test_rng() -> Rng {
 pub struct RandomOrdered(std::rc::Rc<std::cell::RefCell<rand::rngs::SmallRng>>);
 
 impl RandomOrdered {
-    /// Create a new endless [`Iterator`] of RandomOrdered, created with a shared
+    /// Creates a new endless [`Iterator`] of RandomOrdered, created with a shared.
     /// [`rand::rngs::SmallRng`].
     pub fn new_iter(seed: u64) -> impl Iterator<Item = Self> {
         let rng = std::rc::Rc::new(std::cell::RefCell::new(
@@ -72,7 +72,7 @@ pub struct MaybePanickingOrdered<const LIKELIHOOD: usize, T: Ord>(
 );
 
 impl<const LIKELIHOOD: usize, T: Ord> MaybePanickingOrdered<LIKELIHOOD, T> {
-    /// Map an [`Iterator`] of `T` to `Self` with a shared [`rand::rngs::SmallRng`].
+    /// Maps an [`Iterator`] of `T` to `Self` with a shared [`rand::rngs::SmallRng`].
     pub fn map_iter(iter: impl Iterator<Item = T>, seed: u64) -> impl Iterator<Item = Self> {
         let rng = std::rc::Rc::new(std::cell::RefCell::new(
             rand::rngs::SmallRng::seed_from_u64(seed),
@@ -125,14 +125,14 @@ impl<const LIKELIHOOD: usize, T: Ord> Ord for MaybePanickingOrdered<LIKELIHOOD, 
 pub struct IndexedOrdered<T: Ord>(usize, T);
 
 impl<T: Ord> IndexedOrdered<T> {
-    /// Create a new iterator of `IndexedOrdered`, tracking the position of each element in `iter`.
+    /// Creates a new iterator of `IndexedOrdered`, tracking the position of each element in `iter`.
     pub fn map_iter(iter: impl Iterator<Item = T>) -> impl Iterator<Item = Self> {
         iter.enumerate()
             .map(|(index, element)| Self(index, element))
     }
 
-    /// Check `iter` is sorted and check for stability, e.g. equal elements keeping their initial
-    /// relative ordering.
+    /// Checks that `iter` is sorted and check for stability, e.g. equal elements keeping their
+    /// initial relative ordering.
     ///
     /// Returns `Ok(result)` if `iter` is sorted with regards to `T` where `result` indicates if
     /// the sort is stable. Otherwise, returns `Err(())` if `iter` was not sorted with regards to
@@ -181,12 +181,66 @@ impl<T: Ord> Ord for IndexedOrdered<T> {
     }
 }
 
-/// Test the sort on an empty slice
+/// Generates a sequence of random test functions, to test a [`crate::algorithms::Sort`].
+///
+/// # Example usage
+///
+/// ```
+/// #[cfg(test)]
+/// mod tets {
+///     generate_test_suite! {
+///         TEST_SIZE: $size:expr;
+///         TEST_RUNS: $runs:expr;
+///
+///         SortToTest,
+///         AnotherSortToTest,
+///         // ...
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! generate_test_suite {
+    (
+        TEST_SIZE: $size:expr;
+        TEST_RUNS: $runs:expr;
+
+        $(
+            $algorithm:ty
+        ),+
+        $(,)?
+    ) => {
+        const TEST_SIZE: usize = $size;
+        const TEST_RUNS: usize = $runs;
+
+        #[test]
+        fn test_empty() {
+            $(
+                $crate::test::test_empty::<$algorithm>();
+            )+
+        }
+
+        #[test]
+        fn test_random_sorted() {
+            $(
+                $crate::test::test_random_sorted::<TEST_RUNS, TEST_SIZE, $algorithm>();
+            )+
+        }
+
+        #[test]
+        fn test_random_stable_sorted() {
+            $(
+                $crate::test::test_random_stable_sorted::<TEST_RUNS, TEST_SIZE, $algorithm>();
+            )+
+        }
+    };
+}
+
+/// Tests the sort on an empty slice.
 pub fn test_empty<S: crate::algorithms::Sort>() {
     S::sort::<usize>(&mut []);
 }
 
-/// Test the sort on some random ordered slices and check they are sorted afterwords
+/// Tests the sort on some random ordered slices and check they are sorted afterwords.
 pub fn test_random_sorted<const RUNS: usize, const TEST_SIZE: usize, S: crate::algorithms::Sort>() {
     let mut rng = test_rng();
 
@@ -218,7 +272,8 @@ pub fn test_random_sorted<const RUNS: usize, const TEST_SIZE: usize, S: crate::a
     }
 }
 
-/// Like [`test_random_sorted`] but additionally checks that the sort was stable
+/// Like [`test_random_sorted`] but additionally checks that the sort was stable or unstable
+/// depending on [`S::IS_STABLE`](crate::algorithms::Sort::IS_STABLE).
 pub fn test_random_stable_sorted<
     const RUNS: usize,
     const TEST_SIZE: usize,
@@ -236,6 +291,7 @@ pub fn test_random_stable_sorted<
         S::sort(&mut ordered_values);
 
         match IndexedOrdered::is_stable_sorted(ordered_values.iter()) {
+            Ok(false) if !S::IS_STABLE => return, // Correctly determined that `S` is not stable
             Ok(stable) => assert!(stable, "Elements in {run} were not sorted stable"),
             Err(()) => panic!("Elements in run {run} were not sorted at all"),
         }
@@ -248,10 +304,14 @@ pub fn test_random_stable_sorted<
         S::sort(&mut ordered_values);
 
         match IndexedOrdered::is_stable_sorted(ordered_values.iter()) {
+            Ok(false) if !S::IS_STABLE => return, // Correctly determined that `S` is not stable
             Ok(stable) => assert!(stable, "Elements in {run} were not sorted stable"),
             Err(()) => panic!("Elements in run {run} were not sorted at all"),
         }
     }
 
-    assert!(S::IS_STABLE);
+    assert!(
+        S::IS_STABLE,
+        "Sort should be stable otherwise this test should return earlier"
+    );
 }

@@ -223,10 +223,9 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::generate_test_suite;
 
-    const RUNS: usize = crate::test::DEFAULT_RUNS;
-    const TEST_SIZE: usize = crate::test::DEFAULT_TEST_SIZE;
+    use super::*;
 
     type PeekSortDecreasing = PeekSort<
         DefaultInsertionSort,
@@ -236,21 +235,11 @@ mod tests {
         false,
     >;
 
-    #[test]
-    fn empty() {
-        crate::test::test_empty::<PeekSort>();
-        crate::test::test_empty::<PeekSortDecreasing>();
-    }
+    generate_test_suite! {
+        TEST_SIZE: crate::test::DEFAULT_TEST_SIZE;
+        TEST_RUNS: crate::test::DEFAULT_TEST_RUNS;
 
-    #[test]
-    fn random() {
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PeekSort>();
-        crate::test::test_random_sorted::<RUNS, TEST_SIZE, PeekSortDecreasing>();
-    }
-
-    #[test]
-    fn random_stable() {
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PeekSort>();
-        crate::test::test_random_stable_sorted::<RUNS, TEST_SIZE, PeekSortDecreasing>();
+        PeekSort,
+        PeekSortDecreasing,
     }
 }
