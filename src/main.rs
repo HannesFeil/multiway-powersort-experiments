@@ -106,10 +106,12 @@ fn write_output<S: Samples<N>, const N: usize>(
 
     // Write the CSV header
     file.write_all(S::headers().join(",").as_bytes())?;
+    file.write_all(b"\n")?;
 
     // Write the individual lines (escaping should not be necessary since we only write integers)
     for line in samples.csv_lines() {
         file.write_all(line.join(",").as_bytes())?;
+        file.write_all(b"\n")?;
     }
 
     Ok(())
