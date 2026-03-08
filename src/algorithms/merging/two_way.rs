@@ -115,16 +115,12 @@ impl MergingMethod for CopyBoth {
     }
 }
 
-// TODO: update description (especially space requirement)
-/// A [`MergingMethod`] implementation via a galloping merge procedure
-///
-/// The `buffer` given in [`Self::merge`] has to have at least the same
-/// size as the `slice`.
+/// A [`MergingMethod`] that utilizes a galloping strategy taken from Timsort.
 #[derive(Debug, Clone, Copy)]
 pub struct Galloping<const MIN_GALLOP: usize = 7>;
 
 impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
-    const IS_STABLE: bool = true; // TODO: check this
+    const IS_STABLE: bool = true;
 
     fn display() -> String {
         format!("galloping (MIN_GALLOP = {MIN_GALLOP})")
@@ -135,26 +131,15 @@ impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
             return;
         }
 
-        // FIXME: this is inaccurate
-        #[cfg(feature = "counters")]
-        #[expect(
-            clippy::as_conversions,
-            reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
-        )]
-        {
-            crate::GLOBAL_COUNTERS
-                .merge_slice
-                .increase(slice.len() as u64);
-            crate::GLOBAL_COUNTERS
-                .merge_buffer
-                .increase(slice.len() as u64);
-        }
-
+        // Gallop right to exclude elements from the left run that are smaller than all from the
+        // right run.
         let start = Self::gallop::<T, false>(&slice[run_length], &slice[..run_length], 0);
         if start == run_length {
             return;
         }
 
+        // Gallop left to exclude elements from the right run that are larger than all from the
+        // left run.
         let end = Self::gallop::<T, true>(
             &slice[run_length - 1],
             &slice[run_length..],
@@ -166,6 +151,7 @@ impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
 
         let mut min_gallop = MIN_GALLOP;
 
+        // Merge depending on the smaller run
         if run_length - start <= end - run_length {
             Self::merge_low(
                 &mut slice[start..end],
@@ -185,62 +171,79 @@ impl<const MIN_GALLOP: usize> MergingMethod for Galloping<MIN_GALLOP> {
 }
 
 impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
-    // FIXME: fix this comment, more precise
-    /// Return the insertion index of `key` in `slice`, assuming `slice` is sorted.
-    /// `hint` is the starting index, from which to gallop.
-    /// If `LEFT`, gallop left and otherwise gallop right.
-    fn gallop<T: Ord, const LEFT: bool>(key: &T, slice: &[T], hint: usize) -> usize {
+    /// Returns the index `i` such that after inserting `key` between index at `i`, `slice` is
+    /// still sorted. Assumes `slice` is sorted.
+    ///
+    /// The starting point `hint` indicates from where to start galloping.
+    ///
+    /// `BEFORE_EQUAL` determines if `i` is chosen before equal elements and otherwise after them.
+    fn gallop<T: Ord, const BEFORE_EQUAL: bool>(key: &T, slice: &[T], hint: usize) -> usize {
         debug_assert!(slice.is_sorted());
         assert!((0..slice.len()).contains(&hint));
 
-        let mut last_offset = 0;
+        let mut previous_offset = 0;
         let mut offset = 1;
 
         // Determine comparison functions depending on galloping direction
         type Comparator<T> = fn(&T, &T) -> bool;
-        let (cmp, cmp_negated): (Comparator<T>, Comparator<T>) =
-            if LEFT { (T::gt, T::le) } else { (T::ge, T::lt) };
+        let (should_insert_past, should_not_insert_past): (Comparator<T>, Comparator<T>) =
+            if BEFORE_EQUAL {
+                (T::gt, T::le)
+            } else {
+                (T::ge, T::lt)
+            };
 
         // Check if we're searching `slice[..hint]` or `slice[hint..]`
-        if cmp(key, &slice[hint]) {
+        if should_insert_past(key, &slice[hint]) {
             // Use quadratic search to find the containing interval
             let max_offset = slice.len() - hint;
-            while offset < max_offset && cmp(key, &slice[hint + offset]) {
-                last_offset = offset;
+            while offset < max_offset && should_insert_past(key, &slice[hint + offset]) {
+                previous_offset = offset;
                 offset = (offset << 1) + 1;
             }
+            // Invariants:
+            // - insert after hint + previous_offset
+            // - insert before or at hint + offset
+
             offset = std::cmp::min(offset, max_offset);
 
-            // Since we searched `slice[hint..]` we have to add it as starting offset
-            last_offset += hint + 1;
+            // Since we searched `slice[hint..]` we have to adjust the indices
+            previous_offset += hint + 1; // + 1 since we insert after hint + previous_offset
             offset += hint;
         } else {
             // Use quadratic search to find the containing interval
             let max_offset = hint + 1;
-            while offset < max_offset && cmp_negated(key, &slice[hint - offset]) {
-                last_offset = offset;
+            while offset < max_offset && should_not_insert_past(key, &slice[hint - offset]) {
+                previous_offset = offset;
                 offset = (offset << 1) + 1;
             }
+            // Invariants:
+            // - insert before or at hint - previous_offset
+            // - insert after hint - offset
+
             offset = std::cmp::min(offset, max_offset);
 
-            // Since we searched `slice[..hint]` backwards, we reverse our offset
-            let tmp = last_offset;
-            last_offset = hint + 1 - offset;
-            offset = hint - tmp;
+            // Since we searched `slice[..hint]` backwards, we reverse the offsets
+            let tmp = previous_offset;
+            previous_offset = hint + 1 - offset; // + 1 since we insert after hint - offset
+            offset = hint - tmp; // No + 1 since we know we don't insert after hint - previous_offset
         }
-        assert!(last_offset < offset + 1 && offset <= slice.len());
+        assert!(previous_offset <= offset && offset <= slice.len());
 
         // Perform binary search in the found interval
-        let result = slice[last_offset..offset].partition_point(|x| cmp(key, x)) + last_offset;
+        let result = slice[previous_offset..offset].partition_point(|x| should_insert_past(key, x))
+            + previous_offset;
 
-        debug_assert_eq!(result, slice.partition_point(|x| cmp(key, x)),);
+        debug_assert_eq!(
+            result,
+            slice.partition_point(|x| should_insert_past(key, x)),
+        );
 
         result
     }
 
-    // FIXME: better doc
     /// Sort the given `slice` assuming `slice[..run_length]` and `slice[run_length..]` are
-    /// already sorted.
+    /// already sorted and `run_length < slice.len() - run_length` and `slice[0] > slice[run_length]`.
     fn merge_low<T: Ord>(
         slice: &mut [T],
         run_length: usize,
@@ -256,33 +259,56 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             "Split point has to be within slice bounds"
         );
 
+        #[cfg(feature = "counters")]
+        #[expect(
+            clippy::as_conversions,
+            reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
+        )]
+        {
+            crate::GLOBAL_COUNTERS
+                .merge_slice
+                .increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_buffer
+                .increase(run_length as u64);
+        }
+
         // Set buffer size
         let buffer = &mut buffer[..run_length];
 
-        // TODO: safety comment
+        // SAFETY: all runs are valid by construction and we keep invariants about neither run
+        // being empty before copying from them.
         unsafe {
-            // Copy start into temporary buffer
+            // Copy `slice[..run_length]` into temporary buffer
             std::ptr::copy_nonoverlapping(
                 slice.as_mut_ptr(),
-                buffer.as_mut_ptr() as *mut T,
+                buffer.as_mut_ptr().cast(),
                 run_length,
             );
 
+            // Construct runs
             let slice_ptrs = slice.as_mut_ptr_range();
             let runs = [
-                // Left run in buffer
+                // Left run in buffer (we just initialized it)
                 super::Run(buffer.as_mut_ptr_range()).assume_init(),
                 // Right run at the end of slice
                 super::Run(slice_ptrs.start.add(run_length)..slice_ptrs.end),
             ];
+
+            // The output run
+            // NOTE: Since `output` and `right` overlap, make sure to use the right copying method
             let output = super::Run(slice_ptrs);
 
+            // This guard makes sure all elements get written back into `output` on panic
             let mut guard = super::MergingDropGuard::new(runs, output);
 
+            // References for easier access, guard still owns the runs
             let &mut [ref mut left, ref mut right] = &mut guard.runs;
             let output = &mut guard.output;
 
+            // Use a closure to allow early break out of block
             (move || {
+                // Copy the first element from `right` into `output` since it's the smallest
                 right.copy_nonoverlapping_prefix_to(output, 1);
 
                 // Right side only had one element, only need to copy the left side
@@ -301,10 +327,12 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                     return;
                 }
 
+                // Continuously copy elements until `left.len() == 1` or `right.is_empty()`
                 'outer: loop {
                     let mut count1 = 0;
                     let mut count2 = 0;
 
+                    // Merge one by one until threshold for bulk merging is reached
                     while (count1 | count2) < *min_gallop {
                         assert!(left.len() > 1);
                         assert!(!right.is_empty());
@@ -330,12 +358,15 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                         }
                     }
 
+                    // Gallop and merge multiple until it's no longer worth it
                     while count1 >= MIN_GALLOP || count2 >= MIN_GALLOP {
                         assert!(left.len() > 1);
                         assert!(!right.is_empty());
 
+                        // Gallop right to find how many left elements are smaller than right
                         count1 = Self::gallop::<T, false>(&*right.start(), left.as_slice(), 0);
                         if count1 != 0 {
+                            // Copy the elements
                             left.copy_nonoverlapping_prefix_to(output, count1);
 
                             if left.len() <= 1 {
@@ -343,14 +374,17 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                             }
                         }
 
+                        // Right element must be lowest at this point and we know right is not empty
                         right.copy_nonoverlapping_prefix_to(output, 1);
 
                         if right.is_empty() {
                             break 'outer;
                         }
 
+                        // Gallop left to find how many right elements are smaller than right
                         count2 = Self::gallop::<T, true>(&*left.start(), right.as_slice(), 0);
                         if count2 != 0 {
+                            // Copy the elements
                             right.copy_prefix_to(output, count2);
 
                             if right.is_empty() {
@@ -358,37 +392,46 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                             }
                         }
 
+                        // Left element must be lowest at this point and we know left is not empty
                         left.copy_nonoverlapping_prefix_to(output, 1);
 
                         if left.len() == 1 {
                             break 'outer;
                         }
 
+                        // Lower threshold for starting bulk merging
                         *min_gallop = min_gallop.saturating_sub(1);
                     }
 
+                    // Increase threshold for starting bulk merging
                     *min_gallop += 2;
                 }
 
-                *min_gallop = std::cmp::max(*min_gallop, 1);
-
+                // Loop end is reach so either `left.len() == 1` or `right.is_empty()`
                 if left.len() == 1 {
                     assert!(!right.is_empty());
+                    // Copy the remaining elements from right
                     right.copy_prefix_to(output, right.len());
+                    // Copy the last element from left
                     left.copy_nonoverlapping_prefix_to(output, 1);
                 } else {
                     assert!(!left.is_empty());
                     assert!(right.is_empty());
+                    // Right is empty so just copy over left
                     left.copy_nonoverlapping_prefix_to(output, left.len());
                 }
             })();
 
             // Guard should be empty at this point
             debug_assert!(guard.is_empty());
+
+            // We are done merging so disarm the guard
             guard.disarm();
         }
     }
 
+    /// Sort the given `slice` assuming `slice[..run_length]` and `slice[run_length..]` are
+    /// already sorted and `slice.len() - run_length <= run_length` and `slice[run_length - 1] > slice[slice.len() - 1]`.
     fn merge_high<T: Ord>(
         slice: &mut [T],
         run_length: usize,
@@ -404,36 +447,59 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
             "Split point has to be within slice bounds"
         );
 
+        #[cfg(feature = "counters")]
+        #[expect(
+            clippy::as_conversions,
+            reason = "slice.len() will realistically stay way below u64::MAX, so this is lossless"
+        )]
+        {
+            crate::GLOBAL_COUNTERS
+                .merge_slice
+                .increase(slice.len() as u64);
+            crate::GLOBAL_COUNTERS
+                .merge_buffer
+                .increase((slice.len() - run_length) as u64);
+        }
+
         // Set buffer size
         let buffer = &mut buffer[..slice.len() - run_length];
 
-        // TODO: safety comment
+        // SAFETY: all runs are valid by construction and we keep invariants about neither run
+        // being empty before copying from them.
         unsafe {
             // Copy suffix into temporary buffer
             std::ptr::copy_nonoverlapping(
                 slice.as_mut_ptr().add(run_length),
-                buffer.as_mut_ptr() as *mut T,
+                buffer.as_mut_ptr().cast(),
                 slice.len() - run_length,
             );
 
+            // Construct runs
             let slice_ptrs = slice.as_mut_ptr_range();
             let runs = [
-                // Left run in buffer
+                // Left run at the start of the slice
                 super::Run(slice_ptrs.start..slice_ptrs.start.add(run_length)),
-                // Right run at the end of slice
+                // Right run in buffer (we just initialized it)
                 super::Run(buffer.as_mut_ptr_range()).assume_init(),
             ];
+            // Output run
+            // NOTE: This run overlaps with right run so be careful when copying elements
             let output = super::Run(slice_ptrs);
 
+            // This guard makes sure all elements get written back into `output` on panic
             let mut guard = super::MergingDropGuard::new(runs, output);
 
+            // References for easier access, guard still owns the runs
             let &mut [ref mut left, ref mut right] = &mut guard.runs;
             let output = &mut guard.output;
 
+            // NOTE: We are merging into slice backwards
+            // Use a closure to allow early break out of block
             (|| {
+                // Copy the first element from `left` into `output` since it's the smallest
                 left.copy_nonoverlapping_suffix_to(output, 1);
 
-                // Left side only had one element, only need to copy the left side
+                // Left side only had one element, only need to copy the right side
                 if left.is_empty() {
                     right.copy_nonoverlapping_suffix_to(output, right.len());
 
@@ -449,10 +515,12 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                     return;
                 }
 
+                // Loop until `right.len() == 1` or `left.is_empty()`
                 'outer: loop {
                     let mut count1 = 0;
                     let mut count2 = 0;
 
+                    // Merge one by one until threshold for bulk merging is reached
                     while (count1 | count2) < *min_gallop {
                         assert!(right.len() > 1);
                         assert!(!left.is_empty());
@@ -478,10 +546,12 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                         }
                     }
 
+                    // Gallop and merge multiple until it's no longer worth it
                     while count1 >= MIN_GALLOP || count2 >= MIN_GALLOP {
                         assert!(right.len() > 1);
                         assert!(!left.is_empty());
 
+                        // Gallop right to find how many left elements are larger than right
                         let left_len = left.len();
                         count1 = left.len()
                             - Self::gallop::<T, false>(
@@ -490,6 +560,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                                 left_len - 1,
                             );
                         if count1 != 0 {
+                            // Copy the elements
                             left.copy_suffix_to(output, count1);
 
                             if left.is_empty() {
@@ -497,12 +568,14 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                             }
                         }
 
+                        // Right now has the largest element and we know it's not empty
                         right.copy_nonoverlapping_suffix_to(output, 1);
 
                         if right.len() == 1 {
                             break 'outer;
                         }
 
+                        // Gallop left to find how many right elements are larger than left
                         let right_len = right.len();
                         count2 = right.len()
                             - Self::gallop::<T, true>(
@@ -511,6 +584,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                                 right_len - 1,
                             );
                         if count2 != 0 {
+                            // Copy the elements
                             right.copy_nonoverlapping_suffix_to(output, count2);
 
                             if right.len() <= 1 {
@@ -518,32 +592,40 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                             }
                         }
 
+                        // Left now has the largest element and we know it's not empty
                         left.copy_nonoverlapping_suffix_to(output, 1);
 
                         if left.is_empty() {
                             break 'outer;
                         }
 
+                        // Lower threshold for starting bulk merging
                         *min_gallop = min_gallop.saturating_sub(1);
                     }
 
+                    // Increase threshold for starting bulk merging
                     *min_gallop += 2;
                 }
 
-                *min_gallop = std::cmp::max(*min_gallop, 1);
-
+                // Loop end is reach so either `right.len() == 1` or `left.is_empty()`
                 if right.len() == 1 {
                     assert!(!left.is_empty());
+                    // Copy the remaining elements from left
                     left.copy_suffix_to(output, left.len());
+                    // Copy the last element from right
                     right.copy_nonoverlapping_suffix_to(output, 1);
                 } else {
                     assert!(!right.is_empty());
                     assert!(left.is_empty());
+                    // Left is empty so just copy over right
                     right.copy_nonoverlapping_suffix_to(output, right.len());
                 }
             })();
 
+            // Guard should be empty at this point
             debug_assert!(guard.is_empty());
+
+            // We are done merging so disarm the guard
             guard.disarm();
         }
     }
