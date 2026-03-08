@@ -12,6 +12,8 @@ pub trait MultiMergingMethod<const K: usize> {
     /// `slice[run_lengths[0]..run_lengths[1]]`, ... using `buffer`.
     ///
     /// It must hold that `run_lengths.len() <= K`.
+    ///
+    /// `buffer.len()` should be greater or equal to `Self::required_capacity(slice.len())`.
     fn merge<T: Ord>(
         slice: &mut [T],
         run_lengths: &[usize],

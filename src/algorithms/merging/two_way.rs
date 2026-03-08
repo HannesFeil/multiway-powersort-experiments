@@ -1,13 +1,17 @@
-/// Specifies ways to merge two adjacent runs in a slice, given a buffer
+//! Defines methods to merge two adjacent runs in a slice, see [`MergingMethod`].
+
+/// Specifies ways to merge two adjacent runs in a slice, given a buffer.
 pub trait MergingMethod {
-    /// Whether the merging method is stable
+    /// Whether the merging method is stable.
     const IS_STABLE: bool;
 
-    /// String representation of this merging method
+    /// Returns the string representation of this merging method.
     fn display() -> String;
 
-    /// Merge the two sorted runs `0..run_length` and `run_length..slice.len()`, potentially
-    /// using `buffer`.
+    /// Merges the two sorted runs `slice[0..run_length]` and `slice[run_length..slice.len()]`,
+    /// potentially using `buffer`.
+    ///
+    /// `buffer.len()` should be greater or equal to `Self::required_capacity(slice.len())`.
     fn merge<T: Ord>(slice: &mut [T], run_length: usize, buffer: &mut [std::mem::MaybeUninit<T>]);
 
     /// The required capacity of the buffer, needed for merging slices with length less than
@@ -17,10 +21,7 @@ pub trait MergingMethod {
     }
 }
 
-/// A [`MergingMethod`] implementation via a simple merging procedure
-///
-/// The `buffer` given in [`Self::merge`] has to have at least the same
-/// size as the `slice`.
+/// A [`MergingMethod`] that copies all elements into `buffer` and does a simple merge back.
 #[derive(Debug, Clone, Copy)]
 pub struct CopyBoth;
 
@@ -56,58 +57,59 @@ impl MergingMethod for CopyBoth {
         );
         assert!(
             (0..slice.len()).contains(&run_length),
-            "Split points needs to be in bounds"
+            "run_lengths needs to be less than or equal to slice.len()"
         );
 
         let buffer = &mut buffer[..slice.len()];
 
-        // FIXME: this comment is outdated.
-        // SAFETY: We make sure to copy each element from left and right into buffer exactly once,
-        // so that buffer ends up a permutation (sorted) of slice. Therefor at the end we may assume
-        // `slice.len()` elements in buffer are initialized and may be copied back into slice.
-        // without duplication.
+        // SAFETY: We copy each element into buffer and back exactly once, such that slice ends up
+        // permuted. Since we have exclusive access to slice and buffer, the constructed pointer
+        // ranges are safe to read from and write to.
         unsafe {
             // Copy entire slice into buffer
-            std::ptr::copy_nonoverlapping(
-                slice.as_ptr(),
-                buffer.as_mut_ptr() as *mut T,
-                slice.len(),
-            );
+            std::ptr::copy_nonoverlapping(slice.as_ptr(), buffer.as_mut_ptr().cast(), slice.len());
 
+            // Construct the runs.
+            // These are safe to assume init since we just copied over the elements.
             let ptr_range = buffer.as_mut_ptr_range();
             let runs = [
                 super::Run(ptr_range.start..ptr_range.start.add(run_length)).assume_init(),
                 super::Run(ptr_range.start.add(run_length)..ptr_range.end).assume_init(),
             ];
+
+            // Construct the `output` run
             let output = super::Run(slice.as_mut_ptr_range());
 
-            // SAFETY: all runs are readable valid sub-slices and output is writable and large
-            // enough for all elements in slice.
+            // All runs and output are valid by construction.
+            // This makes sure each element in `buffer` gets copied back, even if a comparison
+            // panics.
             let mut guard = super::MergingDropGuard::new(runs, output);
 
             // Destructure bindings for easier access, these are only references and
             // guard is still responsible for cleaning up.
             let &mut [ref mut left, ref mut right] = &mut guard.runs;
+            let output = &mut guard.output;
 
             // Repeatedly copy the smaller element of both runs into the slice
             while !left.is_empty() && !right.is_empty() {
                 if *left.start() <= *right.start() {
-                    left.copy_nonoverlapping_prefix_to(&mut guard.output, 1);
+                    left.copy_nonoverlapping_prefix_to(output, 1);
                 } else {
-                    right.copy_nonoverlapping_prefix_to(&mut guard.output, 1);
+                    right.copy_nonoverlapping_prefix_to(output, 1);
                 }
             }
 
             // Copy the rest of the remaining runs into the slice
             if !left.is_empty() {
-                left.copy_nonoverlapping_prefix_to(&mut guard.output, left.len());
+                left.copy_nonoverlapping_prefix_to(output, left.len());
             }
             if !right.is_empty() {
-                right.copy_nonoverlapping_prefix_to(&mut guard.output, right.len());
+                right.copy_nonoverlapping_prefix_to(output, right.len());
             }
 
-            // Disarm drop guard, we should be done anyway
             debug_assert!(guard.is_empty());
+
+            // We are done at this point, so disarm the guard
             guard.disarm();
         }
     }
