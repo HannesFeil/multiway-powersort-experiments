@@ -306,14 +306,12 @@ fn perform_experiment<
     let mut data = generator.initialize(size, rng);
 
     for run in 0..=runs {
+        #[cfg(feature = "counters")]
+        GLOBAL_COUNTERS.reset();
+
         let now = std::time::Instant::now();
         sorter(std::hint::black_box(&mut data));
         let elapsed = now.elapsed();
-
-        assert!(
-            data.is_sorted(),
-            "Data was not sorted after algorithm run: {run}"
-        );
 
         // Skip first sample (behavior taken from original codebase)
         if run != 0 {
@@ -321,9 +319,11 @@ fn perform_experiment<
             bar.inc(1);
         }
 
-        generator.reinitialize(&mut data, rng);
+        assert!(
+            data.is_sorted(),
+            "Data was not sorted after algorithm run: {run}"
+        );
 
-        #[cfg(feature = "counters")]
-        GLOBAL_COUNTERS.reset();
+        generator.reinitialize(&mut data, rng);
     }
 }
