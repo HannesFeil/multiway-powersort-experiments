@@ -359,7 +359,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                     }
 
                     // Gallop and merge multiple until it's no longer worth it
-                    while count1 >= MIN_GALLOP || count2 >= MIN_GALLOP {
+                    loop {
                         assert!(left.len() > 1);
                         assert!(!right.is_empty());
 
@@ -401,6 +401,10 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
 
                         // Lower threshold for starting bulk merging
                         *min_gallop = min_gallop.saturating_sub(1);
+
+                        if count1 < MIN_GALLOP && count2 < MIN_GALLOP {
+                            break;
+                        }
                     }
 
                     // Increase threshold for starting bulk merging
@@ -547,7 +551,7 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
                     }
 
                     // Gallop and merge multiple until it's no longer worth it
-                    while count1 >= MIN_GALLOP || count2 >= MIN_GALLOP {
+                    loop {
                         assert!(right.len() > 1);
                         assert!(!left.is_empty());
 
@@ -601,6 +605,10 @@ impl<const MIN_GALLOP: usize> Galloping<MIN_GALLOP> {
 
                         // Lower threshold for starting bulk merging
                         *min_gallop = min_gallop.saturating_sub(1);
+
+                        if count1 < MIN_GALLOP && count2 < MIN_GALLOP {
+                            break;
+                        }
                     }
 
                     // Increase threshold for starting bulk merging
