@@ -29,21 +29,22 @@ fn main() {
     } = cli::Args::parse();
 
     // Validate the given algorithm variant
-    let Some(variant) = cli::AlgorithmVariants::validate(algorithm, variant) else {
+    if !cli::Algorithm::validate(algorithm, &variant) {
         println!("Invalid variant {variant} for algorithm {algorithm}");
         println!("Possible variants:");
-        for (index, variant) in cli::AlgorithmVariants::variants(algorithm).enumerate() {
-            println!("{index:>3}: {variant}");
+        for (variant, description) in cli::Algorithm::variant_descriptions(algorithm) {
+            println!("{variant}: {description}");
         }
         return;
     };
 
     println!(
-        "Running measurements for the following (stable: {stable}) algorithm:\n{alg}",
-        alg = cli::AlgorithmVariants::variants(algorithm)
-            .nth(variant)
+        "Running measurements for the following (stable: {stable}) algorithm:\n({variant}) {alg}",
+        alg = algorithm
+            .variant_descriptions()
+            .find_map(|(id, description)| (*id == variant).then_some(description))
             .unwrap(),
-        stable = cli::AlgorithmVariants::is_stable(algorithm, variant).unwrap(),
+        stable = algorithm.is_stable(&variant).unwrap(),
     );
     println!("Runs: {runs}, Slice size: {size}, Data type: {data}");
 
@@ -56,36 +57,69 @@ fn main() {
         }
     };
 
-    let (samples, stats);
+    // Collect different samples if we count comparisons
+    #[cfg(not(feature = "counters"))]
+    /// The sample type to collect, measured runtime.
+    type SampleOutput = std::time::Duration;
+    #[cfg(feature = "counters")]
+    /// The sample type to collect, measured comparisons and other counters.
+    type SampleOutput = CounterSample;
 
-    // Run the experiment with the given algorithm and data
-    //
-    // This macro generates a match, dispatching for each single type, since generics can not be
-    // resolved statically.
-    with_match_type! {
-        data;
-        T, D => {
+    /// Dummy struct to allow dispatching on different data types.
+    ///
+    /// This is effectively a generic closure.
+    struct DataTypeDispatcher<'rng, R: rand::Rng> {
+        algorithm: cli::Algorithm,
+        variant: String,
+        runs: usize,
+        size: usize,
+        rng: &'rng mut R,
+    }
+    impl<R: rand::Rng> cli::DataTypeDispatcher for DataTypeDispatcher<'_, R> {
+        type Output = Vec<SampleOutput>;
+
+        fn dispatch<
+            T: Ord + std::fmt::Debug,
+            D: crate::data::DataGenerator<T>
+                + crate::data::DataGenerator<crate::data::CountComparisons<T>>,
+        >(
+            self,
+        ) -> Self::Output {
             // Get the sort function pointer (data type can be inferred at this point)
-            let sorter = cli::AlgorithmVariants::sorter(algorithm, variant).unwrap();
+            let sorter = self.algorithm.sorter(&self.variant).unwrap();
 
             // Measure running times
             #[cfg(not(feature = "counters"))]
             {
-                (samples, stats) =
-                    perform_time_experiment::<T, D>(sorter, runs, size, &mut rng);
+                let (samples, stats) =
+                    perform_time_experiment::<T, D>(sorter, self.runs, self.size, self.rng);
 
-                println!("Run times in ms:\n{stats:#?}")
+                println!("Run times in ms:\n{stats:#?}");
+
+                samples
             }
 
             // Measure comparisons and merge costs
             #[cfg(feature = "counters")]
             {
-                (samples, stats) = perform_counters_experiment::<T, D>(sorter, runs, size, &mut rng);
+                let (samples, stats) =
+                    perform_counters_experiment::<T, D>(sorter, self.runs, self.size, self.rng);
 
-                println!("Comparisons:\n{stats:#?}")
-            };
+                println!("Comparisons:\n{stats:#?}");
+
+                samples
+            }
         }
-    };
+    }
+
+    // Run the experiment with the given algorithm and data
+    let samples = data.dispatch(DataTypeDispatcher {
+        algorithm,
+        variant,
+        runs,
+        size,
+        rng: &mut rng,
+    });
 
     // Write samples to output file if given
     if let Some(output) = output {
@@ -210,7 +244,11 @@ fn perform_time_experiment<T: Ord + std::fmt::Debug, D: data::DataGenerator<T>>(
     let mut stats: rolling_stats::Stats<f64> = rolling_stats::Stats::new();
 
     perform_experiment::<_, T, D>(
-        |elapsed| {
+        |sort| {
+            let now = std::time::Instant::now();
+            sort();
+            let elapsed = now.elapsed();
+
             samples.push(elapsed);
             #[expect(
                 clippy::as_conversions,
@@ -249,7 +287,11 @@ fn perform_counters_experiment<
     let mut stats = rolling_stats::Stats::<f64>::new();
 
     perform_experiment::<_, crate::data::CountComparisons<T>, D>(
-        |_| {
+        |sort| {
+            GLOBAL_COUNTERS.reset();
+
+            sort();
+
             let comparisons = GLOBAL_COUNTERS.comparisons.read_and_reset();
             let merge_alloc_cost = GLOBAL_COUNTERS.merge_alloc.read_and_reset();
             let merge_slice_cost = GLOBAL_COUNTERS.merge_slice.read_and_reset();
@@ -287,7 +329,7 @@ fn perform_counters_experiment<
 /// - `size`: The size of the slices to sort
 /// - `rng`: The RNG used for sampling the data
 fn perform_experiment<
-    F: FnMut(std::time::Duration),
+    F: FnMut(&mut dyn FnMut()),
     T: Ord + std::fmt::Debug,
     D: data::DataGenerator<T>,
 >(
@@ -306,17 +348,14 @@ fn perform_experiment<
     let mut data = generator.initialize(size, rng);
 
     for run in 0..=runs {
-        #[cfg(feature = "counters")]
-        GLOBAL_COUNTERS.reset();
-
-        let now = std::time::Instant::now();
-        sorter(std::hint::black_box(&mut data));
-        let elapsed = now.elapsed();
+        let mut sort = || sorter(std::hint::black_box(&mut data));
 
         // Skip first sample (behavior taken from original codebase)
         if run != 0 {
-            sampler(elapsed);
+            sampler(&mut sort);
             bar.inc(1);
+        } else {
+            sort();
         }
 
         assert!(

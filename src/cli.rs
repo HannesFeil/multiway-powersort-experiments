@@ -15,9 +15,9 @@ pub struct Args {
     /// The datatype and distribution to use for sorting
     #[arg(short, long, default_value_t = DataType::RandomRunsSqrtU32)]
     pub data: DataType,
-    /// The algorithm variant, use `-v=-1` to print available options
-    #[arg(short, long, default_value_t = 0)]
-    pub variant: isize,
+    /// The algorithm variant, use `-v=''` to print available options
+    #[arg(short, long, default_value_t = { "default".to_string() })]
+    pub variant: String,
     /// The number of runs to do
     #[arg(short, long, default_value_t = 1_000)]
     pub runs: usize,
@@ -29,33 +29,6 @@ pub struct Args {
     pub seed: Option<u64>,
     /// An optional output file to write the samples to (formatted as CSV)
     pub output: Option<std::path::PathBuf>,
-}
-
-/// The available top level sorting algorithms
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum Algorithm {
-    /// The default sort in [`std`]
-    Std,
-    /// Insertionsort
-    Insertionsort,
-    /// Quicksort
-    Quicksort,
-    /// Peeksort
-    Peeksort,
-    /// Mergesort
-    Mergesort,
-    /// Timsort
-    Timsort,
-    /// Powersort
-    Powersort,
-    /// Powersort
-    MultiwayPowersort,
-}
-
-impl std::fmt::Display for Algorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(clap::ValueEnum::to_possible_value(self).unwrap().get_name())
-    }
 }
 
 /// Returns the multiline string representation of a sorting algorithm.
@@ -82,136 +55,97 @@ pub fn display_inline<S: Sort>() -> String {
     )
 }
 
-/// Declare the available algorithm variants.
-///
-/// We use a macro to statically dispatch on the respective type, given an algorithm and variant.
+/// A trait for dispatching on data type `T` and distribution type `D`.
+pub trait DataTypeDispatcher {
+    /// The output of the dispatch.
+    type Output;
+
+    /// Dispatches with `T` and `D`.
+    fn dispatch<
+        T: Ord + std::fmt::Debug,
+        D: crate::data::DataGenerator<T>
+            + crate::data::DataGenerator<crate::data::CountComparisons<T>>,
+    >(
+        self,
+    ) -> Self::Output;
+}
+
+/// A trait for dispatching on [`crate::algorithm::Sort`] type `T`.
+pub trait SortDispatcher {
+    /// The output of the dispatch.
+    type Output;
+
+    /// Dispatches with `T`.
+    fn dispatch<T: crate::algorithms::Sort>(self) -> Self::Output;
+}
+
+/// Declare the available algorithms and variants.
 ///
 /// # Example usage
 ///
 /// ```rust
-/// declare_variants! {
-///     AlgorithmVariants {
-///         Algorithm::Std => [
-///             StdSort,
-///             StdSort<false>,
-///         ],
+/// define_algorithms! {
+///     Algorithm {
+///         Std => {
+///             "default":  StdSort,
+///             "unstable": StdSort<false>,
+///         },
 ///         // ...
 ///     }
 /// }
 /// ```
-macro_rules! declare_variants {
+macro_rules! define_algorithms {
     (
         $name:ident {
             $(
-                $top_algorithm:pat => [
+                $(
+                    #[$attr:meta]
+                )*
+                $top_algorithm:ident => {
                     $(
-                        $variant:ty
+                        $id:literal: $variant:ty
                     ),*
                     $(,)?
-                ]
+                }
             ),*
             $(,)?
         }
     ) => {
-        // Create the struct (mainly used as a namespace)
-        pub struct $name;
-
-        // Create the struct implementation
-        impl $name {
-            /// Returns an iterator over every available variant for the given algorithm.
-            ///
-            /// The variants are returned in form of their display representation, see
-            /// [`display()`]
-            pub fn variants(algorithm: Algorithm) -> impl Iterator<Item = String> {
-                let mut variants = Vec::new();
-
-                declare_variants! { @match_algorithm
-                    algorithm => Variant
-                    ($(
-                        $top_algorithm => [
-                            $($variant),*
-                        ]
-                    ),*)
-                    {
-                        variants.push(display::<Variant>())
-                    }
-                }
-                variants.into_iter()
-            }
-
-            /// Returns the sorting function for the given datatype `T` and `algorithm` variant.
-            ///
-            /// If the `variant` is invalid, returns `None`.
-            pub fn sorter<T: Ord>(algorithm: Algorithm, variant: usize) -> Option<fn(&mut [T])> {
-                let mut index = 0;
-
-                declare_variants! { @match_algorithm
-                    algorithm => Variant
-                    ($(
-                        $top_algorithm => [
-                            $($variant),*
-                        ]
-                    ),*)
-                    {
-                        if variant == index {
-                            return Some(<Variant as Sort>::sort);
-                        } else {
-                            index += 1;
-                        }
-                    }
-                }
-
-                None
-            }
-
-            /// Returns if the `algorithm` `variant` is stable.
-            ///
-            /// If the `variant` is invalid returns `None`.
-            pub fn is_stable(algorithm: Algorithm, variant: usize) -> Option<bool> {
-                let mut index = 0;
-
-                declare_variants! { @match_algorithm
-                    algorithm => Variant
-                    ($(
-                        $top_algorithm => [
-                            $($variant),*
-                        ]
-                    ),*)
-                    {
-                        if variant == index {
-                            return Some(<Variant as Sort>::IS_STABLE);
-                        } else {
-                            index += 1;
-                        }
-                    }
-                }
-
-                None
-            }
-        }
-    };
-    // Statically dispatch with [`crate::algorithm::Sort`] type, depending on the algorithm and variant
-    (@match_algorithm
-        $alg:expr => $variant_name:ident
-        ($(
-            $top_algorithm:pat => [
-                $($variant:ty),*
-            ]
-        ),*)
-        $code:block
-    ) => {
-        match $alg {
+        /// The available top level sorting algorithms
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+        pub enum $name {
             $(
-                $top_algorithm => {
-                    $(
-                        {
-                            type $variant_name = $variant;
+                $(
+                    #[$attr]
+                )*
+                $top_algorithm
+            ),*
+        }
 
-                            $code
-                        }
+        impl $name {
+            /// Dispatches on the [`crate::algorithm::Sort`] type for `variant`.
+            fn dispatch<D: SortDispatcher>(self, variant: &str, dispatcher: D) -> Option<D::Output> {
+                match (self, variant) {
+                    $(
+                        $(
+                            ($name::$top_algorithm, $id) => Some(dispatcher.dispatch::<$variant>()),
+                        )*
+                    )*
+                    _ => None,
+                }
+            }
+
+            fn variants(self) -> &'static [&'static str] {
+                match self {
+                    $(
+                        Self::$top_algorithm => &[
+                            $(
+                                $id
+                            ),*
+                        ],
                     )*
                 }
-            )*
+            }
         }
     };
 }
@@ -220,38 +154,43 @@ macro_rules! declare_variants {
 use crate::algorithms::*;
 
 // Statically declare all available algorithm variants
-declare_variants! {
-    AlgorithmVariants {
-        Algorithm::Std => [
-            StdSort,
-            StdSort<false>,
-        ],
-        Algorithm::Insertionsort => [
-            insertionsort::InsertionSort,
-            insertionsort::InsertionSort<true>,
-        ],
-        Algorithm::Quicksort => [
-            quicksort::QuickSort,
-            quicksort::QuickSort<
+define_algorithms! {
+    Algorithm {
+        /// The default sort in [`std`]
+        Std => {
+            "default": StdSort,
+            "unstable": StdSort<false>,
+        },
+        /// Insertionsort
+        Insertionsort => {
+            "default": insertionsort::InsertionSort,
+            "binary": insertionsort::InsertionSort<true>,
+        },
+        /// Quicksort
+        Quicksort => {
+            "default": quicksort::QuickSort,
+            "check-sorted": quicksort::QuickSort<
                 quicksort::DefaultRngFactory,
                 quicksort::DefaultInsertionSort,
                 { quicksort::DEFAULT_INSERTION_THRESHOLD },
                 { quicksort::DEFAULT_NINTHER_THRESHOLD },
                 true,
             >,
-        ],
-        Algorithm::Peeksort => [
-            peeksort::PeekSort<
+        },
+        /// Peeksort
+        Peeksort => {
+            "default": peeksort::PeekSort<
                 peeksort::DefaultInsertionSort,
                 peeksort::DefaultMergingMethod,
                 peeksort::DefaultBufGuardFactory,
                 { peeksort::DEFAULT_INSERTION_THRESHOLD },
                 false,
             >,
-        ],
-        Algorithm::Mergesort => [
-            mergesort::MergeSort,
-            mergesort::MergeSort<
+        },
+        /// Mergesort
+        Mergesort => {
+            "default": mergesort::MergeSort,
+            "i1": mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
@@ -259,7 +198,7 @@ declare_variants! {
                 1,
                 false,
             >,
-            mergesort::MergeSort<
+            "i1-check-sorted": mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
@@ -267,7 +206,7 @@ declare_variants! {
                 1,
                 true,
             >,
-            mergesort::MergeSort<
+            "bottom-up-check-sorted": mergesort::MergeSort<
                 mergesort::DefaultInsertionSort,
                 mergesort::DefaultMergingMethod,
                 mergesort::DefaultBufGuardFactory,
@@ -275,28 +214,31 @@ declare_variants! {
                 { mergesort::DEFAULT_INSERTION_THRESHOLD },
                 true,
             >,
-        ],
-        Algorithm::Timsort => [
-            timsort::TimSort,
-            timsort::TimSort<
+        },
+        /// Timsort
+        Timsort => {
+            "default": timsort::TimSort,
+            "copy-both": timsort::TimSort<
                 timsort::DefaultInsertionSort,
                 merging::two_way::CopyBoth,
                 timsort::DefaultBufGuardFactory,
                 { timsort::DEFAULT_MIN_MERGE },
             >,
-            timsort::TimSort<
+            "no-binary-copy-both": timsort::TimSort<
                 insertionsort::InsertionSort<false>,
                 merging::two_way::CopyBoth,
                 timsort::DefaultBufGuardFactory,
                 { timsort::DEFAULT_MIN_MERGE },
             >,
-        ],
-        Algorithm::Powersort => [
-            powersort::PowerSort,
-        ],
-        Algorithm::MultiwayPowersort => [
-            powersort::MultiwayPowerSort,
-            powersort::MultiwayPowerSort<
+        },
+        /// Powersort
+        Powersort => {
+            "default": powersort::PowerSort,
+        },
+        /// Multiway Powersort
+        MultiwayPowersort => {
+            "default": powersort::MultiwayPowerSort,
+            "specific-4-way-merge": powersort::MultiwayPowerSort<
                 powersort::DefaultNodePowerMethod,
                 powersort::DefaultInsertionSort,
                 merging::multi_way::Fourway,
@@ -305,25 +247,67 @@ declare_variants! {
                 { powersort::DEFAULT_MIN_RUN_LENGTH },
                 { powersort::DEFAULT_ONLY_INCREASING_RUNS },
             >,
-        ],
+        },
     }
 }
 
-impl AlgorithmVariants {
-    /// Returns the given variant index as `usize` if valid and `None` otherwise.
-    ///
-    /// Negative values are always invalid.
-    pub fn validate(algorithm: Algorithm, variant: isize) -> Option<usize> {
-        match variant.try_into() {
-            Err(_) => None,
-            Ok(result) => {
-                if result < Self::variants(algorithm).count() {
-                    Some(result)
-                } else {
-                    None
-                }
+impl std::fmt::Display for Algorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(clap::ValueEnum::to_possible_value(self).unwrap().get_name())
+    }
+}
+
+impl Algorithm {
+    /// Checks if `variant` is valid.
+    pub fn validate(self, variant: &str) -> bool {
+        self.variants().contains(&variant)
+    }
+
+    /// Returns the available variants and their descriptions.
+    pub fn variant_descriptions(self) -> impl Iterator<Item = (&'static str, String)> {
+        struct AlgorithmDisplayDispatcher;
+        impl SortDispatcher for AlgorithmDisplayDispatcher {
+            type Output = String;
+
+            fn dispatch<T: crate::algorithms::Sort>(self) -> Self::Output {
+                display::<T>()
             }
         }
+
+        self.variants().iter().map(move |variant| {
+            (
+                *variant,
+                self.dispatch(variant, AlgorithmDisplayDispatcher).unwrap(),
+            )
+        })
+    }
+
+    /// Returns whether the given `variant` is stable.
+    pub fn is_stable(self, variant: &str) -> Option<bool> {
+        struct AlgorithmStableDispatcher;
+        impl SortDispatcher for AlgorithmStableDispatcher {
+            type Output = bool;
+
+            fn dispatch<T: crate::algorithms::Sort>(self) -> Self::Output {
+                T::IS_STABLE
+            }
+        }
+
+        self.dispatch(variant, AlgorithmStableDispatcher)
+    }
+
+    /// Returns the sorting function for `variant`.
+    pub fn sorter<T: Ord>(self, variant: &str) -> Option<fn(&mut [T])> {
+        struct AlgorithmSorterDispatcher<T>(std::marker::PhantomData<T>);
+        impl<T: Ord> SortDispatcher for AlgorithmSorterDispatcher<T> {
+            type Output = fn(&mut [T]);
+
+            fn dispatch<S: crate::algorithms::Sort>(self) -> Self::Output {
+                S::sort
+            }
+        }
+
+        self.dispatch(variant, AlgorithmSorterDispatcher(std::marker::PhantomData))
     }
 }
 
@@ -342,8 +326,6 @@ impl AlgorithmVariants {
 ///     // ...
 /// }
 /// ```
-///
-/// It generates the macro `with_match_type!`, see its documentation for how to use it.
 macro_rules! declare_data_types {
     (
         $(
@@ -355,7 +337,7 @@ macro_rules! declare_data_types {
         $(,)?
     ) => {
         /// Available data types and distributions for sorting.
-        #[derive(Clone, Copy, clap::ValueEnum)]
+        #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
         pub enum DataType {
             $(
                 $(
@@ -365,47 +347,14 @@ macro_rules! declare_data_types {
             ),*
         }
 
-        // Generate the macro for dispatching on the datatype and distribution type
-        // We pass along a '$' used to generate the inner macro
-        declare_data_types! {
-            @declare_match_macro
-            $($name : $type, $d_type),* | $
-        }
-    };
-    (@declare_match_macro $($name:ident : $type:ty, $d_type:ty),* | $dollar:tt) => {
-        /// A macro to dynamically dispatch on the corresponding datatype and distribution type (:
-        ///
-        /// # Example usage
-        ///
-        /// ```rust
-        /// let data = crate::cli::DataType::PermutationU32;
-        ///
-        /// with_match_type! {
-        ///     data;
-        ///     DataType, DistributionType => {
-        ///         println!("{}", std::any::type_name::<DataType>());
-        ///         println!("{}", std::any::type_name::<DistributionType>());
-        ///     }
-        /// };
-        /// ```
-        #[macro_export]
-        #[expect(clippy::crate_in_macro_def)]
-        macro_rules! with_match_type {
-            ($dollar arg:expr; $dollar t:ident, $dollar d:ident => $dollar code:block) => {
-                {
-                    use crate::cli::*;
-                    match $dollar arg {
-                        $(
-                            crate::cli::DataType::$name => {
-                                type $dollar t = $type;
-                                type $dollar d = $d_type;
-
-                                $dollar code
-                            }
-                        ),*
-                    }
+        impl DataType {
+            pub fn dispatch<U: DataTypeDispatcher>(self, dispatcher: U) -> U::Output {
+                match self {
+                    $(
+                        DataType::$name => dispatcher.dispatch::<$type, $d_type>(),
+                    )*
                 }
-            };
+            }
         }
     };
 }

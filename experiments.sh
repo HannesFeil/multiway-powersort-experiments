@@ -13,28 +13,29 @@ run_sorts() {
   local n=$2
   local d=$3
   local file_suffix=$4
+  local prefix="${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED}"
 
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 0 std "${OUTPUT}/std-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 1 std "${OUTPUT}/std-unstable-${file_suffix}"
+  ${prefix} -v default                std "${OUTPUT}/std-${file_suffix}"
+  ${prefix} -v unstable               std "${OUTPUT}/std-unstable-${file_suffix}"
 
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 0 quicksort "${OUTPUT}/quicksort-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 1 quicksort "${OUTPUT}/quicksort-check-sorted-${file_suffix}"
+  ${prefix} -v default                quicksort "${OUTPUT}/quicksort-${file_suffix}"
+  ${prefix} -v check-sorted           quicksort "${OUTPUT}/quicksort-check-sorted-${file_suffix}"
 
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 0 peeksort "${OUTPUT}/peeksort-${file_suffix}"
+  ${prefix} -v default                peeksort "${OUTPUT}/peeksort-${file_suffix}"
 
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 0 mergesort "${OUTPUT}/mergesort-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 1 mergesort "${OUTPUT}/mergesort-i1-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 2 mergesort "${OUTPUT}/mergesort-i1-check-sorted-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 3 mergesort "${OUTPUT}/mergesort-bottom-up-check-sorted-${file_suffix}"
+  ${prefix} -v default                mergesort "${OUTPUT}/mergesort-${file_suffix}"
+  ${prefix} -v i1 mergesort           "${OUTPUT}/mergesort-i1-${file_suffix}"
+  ${prefix} -v i1-check-sorted        mergesort "${OUTPUT}/mergesort-i1-check-sorted-${file_suffix}"
+  ${prefix} -v bottom-up-check-sorted mergesort "${OUTPUT}/mergesort-bottom-up-check-sorted-${file_suffix}"
 
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 0 timsort "${OUTPUT}/timsort-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 1 timsort "${OUTPUT}/trotsort-binary-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 2 timsort "${OUTPUT}/trotsort-simple-${file_suffix}"
+  ${prefix} -v default                timsort "${OUTPUT}/timsort-${file_suffix}"
+  ${prefix} -v copy-both              timsort "${OUTPUT}/trotsort-binary-${file_suffix}"
+  ${prefix} -v no-binary-copy-both    timsort "${OUTPUT}/trotsort-simple-${file_suffix}"
 
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 0 powersort "${OUTPUT}/powersort-${file_suffix}"
+  ${prefix} -v default                powersort "${OUTPUT}/powersort-${file_suffix}"
 
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 0 multiway-powersort "${OUTPUT}/multiway-powersort-${file_suffix}"
-  ${BINARY} --runs ${runs} --size ${n} --data ${d} --seed ${SEED} -v 1 multiway-powersort "${OUTPUT}/multiway-powersort-4-${file_suffix}"
+  ${prefix} -v default                multiway-powersort "${OUTPUT}/multiway-powersort-${file_suffix}"
+  ${prefix} -v specific-4-way-merge   multiway-powersort "${OUTPUT}/multiway-powersort-4-${file_suffix}"
 }
 
 echo "Experiment 1: int, random runs, various n"
